@@ -58,3 +58,16 @@ tr+tr td{border-top:1px solid var(--card-border)}
 
 /* Charts clipping fix */
 .card .recharts-wrapper, .card .recharts-surface { overflow: visible !important; }
+
+/* Glass + polish */
+.card.glass { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03)); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 14px; }
+.card.glass .big { font-size: 28px; font-weight: 800; }
+.cat-card .cat-hero { border-radius: 14px; padding: 14px; border: 1px solid rgba(255,255,255,.1); }
+.cat-title { font-weight: 700; opacity:.9; }
+.cat-value { font-size: 24px; font-weight: 800; margin-top: 6px; }
+.cat-delta { font-size: 13px; opacity:.9; }
+.card .recharts-wrapper, .card .recharts-surface { overflow: visible !important; }
+.pager .nav-btn { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 6px 10px; }
+.dots { display:flex; gap:6px; justify-content:center; margin-top:8px; }
+.dot { width:8px; height:8px; border-radius:8px; background: rgba(255,255,255,.25); }
+.dot.active { background: rgba(255,255,255,.85); }

@@ -39,8 +39,7 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; name: string }>) 
     const buffer = e.data.buffer;
     const name = e.data.name;
 
-    // progress iniziale
-    (self as any).postMessage({ type: "progress", value: 5 } as Msg);
+    (self as any).postMessage({ type: "progress", value: 1 } as Msg);
 
     const isCSV = /\.csv$/i.test(name);
     let wb: XLSX.WorkBook;
@@ -69,28 +68,36 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; name: string }>) 
     const total = raw.length;
     const out: ParsedRow[] = [];
 
-    for (let i = 0; i < raw.length; i++) {
-      const r = raw[i];
-      const year = Number(String(r[annoKey]).trim());
-      const mnum = normMonth(r[meseKey]);
-      if (year && mnum) {
-        const iso = String(year).padStart(4,"0") + "-" + String(mnum).padStart(2,"0") + "-01";
+    // progress reale a chunk
+    const steps = Math.min(60, Math.max(20, Math.ceil(total / 50)));
+    const chunkSize = Math.max(10, Math.ceil(total / steps));
 
-        // stop alla prima cella vuota per riga
-        for (const col of categoryCols) {
-          const cellStr = String(r[col] ?? '').trim();
-          if (cellStr === '') break;
+    let processed = 0;
+    for (let start = 0; start < total; start += chunkSize) {
+      const end = Math.min(total, start + chunkSize);
 
-          const val = parseItNumber(r[col]);
-          if (val == null) continue;
-
-          const catName = String(col).trim() || "Categoria";
-          out.push({ Date: iso, Account: catName, Category: catName, AssetClass: "Other", Currency: "EUR", Value: val });
+      for (let i = start; i < end; i++) {
+        const r = raw[i];
+        const year = Number(String(r[annoKey]).trim());
+        const mnum = normMonth(r[meseKey]);
+        if (year && mnum) {
+          const iso = String(year).padStart(4,"0") + "-" + String(mnum).padStart(2,"0") + "-01";
+          // stop alla prima cella vuota
+          for (const col of categoryCols) {
+            const cellStr = String(r[col] ?? '').trim();
+            if (cellStr === '') break;
+            const val = parseItNumber(r[col]);
+            if (val == null) continue;
+            const catName = String(col).trim() || "Categoria";
+            out.push({ Date: iso, Account: catName, Category: catName, AssetClass: "Other", Currency: "EUR", Value: val });
+          }
         }
+        processed++;
       }
 
-      const pct = Math.max(5, Math.min(99, Math.round(((i + 1) / total) * 95)));
+      const pct = Math.max(1, Math.min(99, Math.round((processed / total) * 98)));
       (self as any).postMessage({ type: "progress", value: pct } as Msg);
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     (self as any).postMessage({ type: "progress", value: 100 } as Msg);

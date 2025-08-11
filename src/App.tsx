@@ -17,7 +17,7 @@ function parseDate(input: any): string {
   if (!isNaN(d.getTime())) return d.toISOString().slice(0,10)
   return String(input)
 }
-function numberFormat(n: number | undefined | null) { if (n == null || isNaN(n as any)) return '–'; return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) }
+function numberFormat(n: number | undefined | null) { if (n == null || isNaN(n as any)) return '–'; return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) }
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
 function downloadTemplate() {
   const rows: BalanceRow[] = [{ Date: '2025-01-31', Account: 'Manual', Category: 'Esempio', AssetClass: 'Cash', Currency: 'EUR', Value: 1000 }]
@@ -70,11 +70,7 @@ export default function App(){
     Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
 
-  // 🔸 categorie dinamiche dal file
-  const categories = useMemo(
-    () => Array.from(new Set(normalized.map(r => r.Category || 'Other'))).sort(),
-    [normalized]
-  )
+  const categories = useMemo(() => Array.from(new Set(normalized.map(r => r.Category || 'Other'))).sort(), [normalized])
 
   const filtered = useMemo(()=> normalized.filter(r => {
     const q=query.toLowerCase();
@@ -133,10 +129,10 @@ export default function App(){
       <h3><TrendingUp size={16}/> Net worth nel tempo</h3>
       <div style={{height:280}}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={byMonth}>
+          <LineChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat().format(v)} />
+            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
             <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
             <Line type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={3} dot={false} />
           </LineChart>
@@ -150,10 +146,10 @@ export default function App(){
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3><LineIcon size={16}/> Linea</h3><span className="badge">{byMonth.length} mesi</span></div>
       <div style={{height:250}}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={byMonth}>
+          <LineChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat().format(v)} />
+            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
             <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
             <Line type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={3} dot={false} />
           </LineChart>
@@ -164,10 +160,10 @@ export default function App(){
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3><PieIcon size={16}/> Barre</h3><span className="badge">Vista alternativa</span></div>
       <div style={{height:250}}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={byMonth}>
+          <BarChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat().format(v)} />
+            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
             <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
             <Bar dataKey="value" fill="#a78bfa" radius={[8,8,0,0] as any} />
           </BarChart>
@@ -207,7 +203,6 @@ export default function App(){
     </div>),
   ] : []
 
-  // Accounts pages
   const AccountsPages = latestByAccount.length ? [
     (<div key="ac1" className="card">
       <h3>Ultima fotografia per account</h3>
@@ -221,10 +216,10 @@ export default function App(){
       <h3>Valore per account (barre)</h3>
       <div style={{height:250}}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={latestByAccount}>
+          <BarChart data={latestByAccount} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
             <XAxis dataKey="Account" stroke="#cbd5e1" interval={0} angle={-20} height={60} />
-            <YAxis stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat().format(v)} />
+            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
             <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
             <Bar dataKey="Value" fill="#60a5fa" radius={[8,8,0,0] as any} />
           </BarChart>
@@ -256,7 +251,7 @@ export default function App(){
           </div>
         </div>
 
-        <p className="subtle">Vai su <b>Input</b> per inserire dati a mano, oppure usa l’upload (opzionale) qui sotto.</p>
+        <p className="subtle">Carica un Excel/CSV qui sotto e usa i filtri. Le categorie si popolano dalle intestazioni del file.</p>
 
         <div className="row row-2" style={{marginTop:16}}>
           <div className="card">

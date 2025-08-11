@@ -130,6 +130,7 @@ export default function App(){
       worker.onmessage = (ev: MessageEvent<any>) => {
         if (ev.data && ev.data.type === "progress") { target.current = Math.max(target.current, ev.data.value || 0); return; }
         if (ev.data && ev.data.type === "result") {
+          try { if (typeof __nudger !== "undefined") clearInterval(__nudger); } catch(e){}
           if (!ev.data.ok) { setErrorMsg(ev.data.error || "Errore di parsing"); setLoading(false); cleanup(); return; }
           setRows(ev.data.rows || []);
           try { localStorage.setItem("wd_rows_v21", JSON.stringify(ev.data.rows || [])); } catch {}

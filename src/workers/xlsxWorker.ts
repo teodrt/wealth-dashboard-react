@@ -54,9 +54,10 @@ self.onmessage = async (e: MessageEvent<{buffer:ArrayBuffer; name:string}>)=>{
     const categoryCols=headerKeys.filter(k=>k!==annoKey && k!==meseKey);
 
     const total=raw.length; const out:ParsedRow[]=[];
-    const steps=Math.min(60, Math.max(20, Math.ceil(total/50)));
-    const chunkSize=Math.max(10, Math.ceil(total/steps));
-    let processed=0;
+    // PIÙ EVENTI: più step e chunk più piccoli
+    const steps=Math.min(150, Math.max(40, Math.ceil(total/40)));
+    const chunkSize=Math.max(5, Math.ceil(total/steps));
+    let processed=0, lastPct=1, rowTicker=0;
 
     for(let start=0; start<total; start+=chunkSize){
       const end=Math.min(total, start+chunkSize);
@@ -68,16 +69,24 @@ self.onmessage = async (e: MessageEvent<{buffer:ArrayBuffer; name:string}>)=>{
           const iso=String(year).padStart(4,"0")+"-"+String(mnum).padStart(2,"0")+"-01";
           for(const col of categoryCols){
             const cellStr=String(r[col]??'').trim();
-            if(cellStr==='') break;            // stop alla prima cella vuota
+            if(cellStr==='') break; // stop alla prima cella vuota
             const val=parseItNumber(r[col]); if(val==null) continue;
             const catName=String(col).trim()||"Categoria";
             out.push({Date:iso, Account:catName, Category:catName, AssetClass:"Other", Currency:"EUR", Value:val});
           }
         }
-        processed++;
+        processed++; rowTicker++;
+
+        // Aggiorna progress ogni ~200 righe per file grandi
+        if(rowTicker>=200){
+          rowTicker=0;
+          const pct=Math.max(1, Math.min(98, Math.round((processed/total)*98)));
+          if(pct>lastPct){ (self as any).postMessage({type:"progress", value:pct} as Msg); lastPct=pct; }
+          await new Promise(r=>setTimeout(r,0));
+        }
       }
-      const pct=Math.max(1, Math.min(99, Math.round((processed/total)*98)));
-      (self as any).postMessage({type:"progress", value:pct} as Msg);
+      const pct=Math.max(1, Math.min(98, Math.round((processed/total)*98)));
+      if(pct>lastPct){ (self as any).postMessage({type:"progress", value:pct} as Msg); lastPct=pct; }
       await new Promise(r=>setTimeout(r,0));
     }
     (self as any).postMessage({type:"progress", value:100} as Msg);

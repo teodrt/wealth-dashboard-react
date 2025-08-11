@@ -1,11 +1,11 @@
 import * as XLSX from "xlsx";
 
 export type ParsedRow = {
-  Date: string;        // YYYY-MM-01
-  Account: string;     // = nome categoria (colonna)
-  Category?: string;   // = nome categoria
-  AssetClass?: string; // "Other"
-  Currency?: string;   // "EUR"
+  Date: string;
+  Account: string;
+  Category?: string;
+  AssetClass?: string;
+  Currency?: string;
   Value: number;
 };
 
@@ -36,7 +36,12 @@ type Msg =
 
 self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; name: string }>) => {
   try {
-    const { buffer, name } = e.data;
+    const buffer = e.data.buffer;
+    const name = e.data.name;
+
+    // progress iniziale
+    (self as any).postMessage({ type: "progress", value: 5 } as Msg);
+
     const isCSV = /\.csv$/i.test(name);
     let wb: XLSX.WorkBook;
     if (isCSV) {
@@ -48,62 +53,48 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; name: string }>) 
 
     const sheetName = wb.SheetNames[0];
     const sheet = wb.Sheets[sheetName];
-    if (!sheet) return (self as any).postMessage({ type: "result", ok: false, error: "Nessun foglio trovato." } as Msg);
+    if (!sheet) { (self as any).postMessage({ type: "result", ok: false, error: "Nessun foglio trovato." } as Msg); return; }
 
     const raw: any[] = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-    if (!raw.length) return (self as any).postMessage({ type: "result", ok: false, error: "Il file è vuoto." } as Msg);
+    if (!raw.length) { (self as any).postMessage({ type: "result", ok: false, error: "Il file è vuoto." } as Msg); return; }
 
     const headerKeys = Object.keys(raw[0] ?? {});
     const annoKey = headerKeys.find(k => /^anno$/i.test(String(k).trim()));
     const meseKey = headerKeys.find(k => /^mese$/i.test(String(k).trim()));
-    if (!annoKey || !meseKey) {
-      return (self as any).postMessage({ type: "result", ok: false, error: "Intestazioni richieste: 'Anno' e 'Mese'." } as Msg);
-    }
+    if (!annoKey || !meseKey) { (self as any).postMessage({ type: "result", ok: false, error: "Intestazioni richieste: 'Anno' e 'Mese'." } as Msg); return; }
+
     const categoryCols = headerKeys.filter(k => k !== annoKey && k !== meseKey);
-    if (!categoryCols.length) {
-      return (self as any).postMessage({ type: "result", ok: false, error: "Aggiungi almeno una colonna categoria (es. 'N26')." } as Msg);
-    }
+    if (!categoryCols.length) { (self as any).postMessage({ type: "result", ok: false, error: "Aggiungi almeno una colonna categoria." } as Msg); return; }
 
     const total = raw.length;
-    const batch = Math.max(25, Math.floor(total / 20));
     const out: ParsedRow[] = [];
 
     for (let i = 0; i < raw.length; i++) {
       const r = raw[i];
       const year = Number(String(r[annoKey]).trim());
       const mnum = normMonth(r[meseKey]);
-      if (!year || !mnum) {
-        if (i % batch === 0) (self as any).postMessage({ type: "progress", value: Math.round((i / total) * 100) } as Msg);
-        continue;
-      }
-      const iso = `${String(year).padStart(4,"0")}-${String(mnum).padStart(2,"0")}-01`;
+      if (year && mnum) {
+        const iso = String(year).padStart(4,"0") + "-" + String(mnum).padStart(2,"0") + "-01";
 
-      // 🔒 STOP alla prima cella vuota: se una categoria in questa riga è vuota, ignoro tutte le successive
-      for (const col of categoryCols) {
-        const cell = r[col];
-        const cellStr = String(cell ?? '').trim();
-        if (cellStr === '') break; // blocca qui per questa riga
+        // stop alla prima cella vuota per riga
+        for (const col of categoryCols) {
+          const cellStr = String(r[col] ?? '').trim();
+          if (cellStr === '') break;
 
-        const val = parseItNumber(cell);
-        if (val == null) continue; // non vuota ma non numerica → salta solo questa
+          const val = parseItNumber(r[col]);
+          if (val == null) continue;
 
-        const catName = String(col).trim() || "Categoria";
-        out.push({
-          Date: iso,
-          Account: catName,
-          Category: catName,
-          AssetClass: "Other",
-          Currency: "EUR",
-          Value: val
-        });
+          const catName = String(col).trim() || "Categoria";
+          out.push({ Date: iso, Account: catName, Category: catName, AssetClass: "Other", Currency: "EUR", Value: val });
+        }
       }
 
-      if (i % batch === 0) (self as any).postMessage({ type: "progress", value: Math.round((i / total) * 100) } as Msg);
+      const pct = Math.max(5, Math.min(99, Math.round(((i + 1) / total) * 95)));
+      (self as any).postMessage({ type: "progress", value: pct } as Msg);
     }
 
     (self as any).postMessage({ type: "progress", value: 100 } as Msg);
-    if (!out.length) (self as any).postMessage({ type: "result", ok: false, error: "Parsed 0 rows. Controlla Anno/Mese e i numeri." } as Msg);
-    else (self as any).postMessage({ type: "result", ok: true, rows: out } as Msg);
+    (self as any).postMessage({ type: "result", ok: true, rows: out } as Msg);
   } catch (err: any) {
     (self as any).postMessage({ type: "result", ok: false, error: err?.message || "Errore di parsing" } as Msg);
   }

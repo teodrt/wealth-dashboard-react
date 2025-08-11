@@ -3,7 +3,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { Upload as UploadIcon, FileDown, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx'
-import InputPage, { BalanceRow as InputRow } from './InputPage'
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number }
 
@@ -19,13 +18,7 @@ function parseDate(input: any): string {
 }
 function numberFormat(n: number | undefined | null) { if (n == null || isNaN(n as any)) return '–'; return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) }
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
-function downloadTemplate() {
-  const rows: BalanceRow[] = [{ Date: '2025-01-31', Account: 'Manual', Category: 'Esempio', AssetClass: 'Cash', Currency: 'EUR', Value: 1000 }]
-  const ws = XLSX.utils.json_to_sheet(rows as any)
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Balances')
-  const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'wealth-template.xlsx'; a.click(); URL.revokeObjectURL(url)
-}
+
 function useKeyNav(onLeft: ()=>void, onRight: ()=>void){ useEffect(()=>{ const h=(e:KeyboardEvent)=>{ if(e.key==='ArrowLeft') onLeft(); if(e.key==='ArrowRight') onRight(); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onLeft,onRight]) }
 function Pager({ pages, index, setIndex }:{ pages: React.ReactNode[]; index: number; setIndex:(i:number)=>void; }){
   const safeIndex = pages.length? ((index % pages.length) + pages.length) % pages.length : 0
@@ -51,7 +44,7 @@ export default function App(){
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
   const [assetFilter, setAssetFilter] = useState<string>('All')
-  const [section, setSection] = useState<'Input'|'Summary'|'Net Worth'|'Allocation'|'Accounts'>('Input')
+  const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'>('Summary')
   const [pageIdx, setPageIdx] = useState(0)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -92,27 +85,30 @@ export default function App(){
   const deltaPct = prevNetWorth ? (delta / prevNetWorth) * 100 : 0
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if(!f) return
-    if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB)."); return; }
-    setErrorMsg(null); setLoading(true); setProgress(0);
+    const inputEl = e.target as HTMLInputElement;
+    const f = inputEl.files?.[0]; if(!f) { inputEl.value=''; return }
+    if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB)."); inputEl.value=''; return; }
+    setErrorMsg(null); setLoading(true); setProgress(5);
     try {
       const buf = await f.arrayBuffer();
       const worker = new Worker(new URL("./workers/xlsxWorker.ts", import.meta.url), { type: "module" });
+      const cleanup = () => { try { worker.terminate(); } catch {} inputEl.value=''; };
       worker.onmessage = (ev: MessageEvent<any>) => {
-        if (ev.data?.type === "progress") { setProgress(ev.data.value); return; }
-        if (ev.data?.type === "result") {
+        if (ev.data && ev.data.type === "progress") { setProgress(ev.data.value || 0); return; }
+        if (ev.data && ev.data.type === "result") {
+          if (!ev.data.ok) { setErrorMsg(ev.data.error || "Errore di parsing"); setLoading(false); cleanup(); return; }
+          setRows(ev.data.rows || []);
+          try { localStorage.setItem("wd_rows_v21", JSON.stringify(ev.data.rows || [])); } catch {}
+          setProgress(100);
           setLoading(false);
-          const { ok, rows, error } = ev.data || {};
-          if (!ok) { setErrorMsg(error || "Errore di parsing"); worker.terminate(); return; }
-          setRows(rows);
-          try { localStorage.setItem("wd_rows_v21", JSON.stringify(rows)); } catch {}
-          worker.terminate();
+          cleanup();
         }
       };
       worker.postMessage({ buffer: buf, name: f.name }, [buf as any]);
     } catch (err: any) {
       setLoading(false);
       setErrorMsg(err?.message || "Errore di caricamento");
+      inputEl.value='';
     }
   }
 
@@ -233,25 +229,7 @@ export default function App(){
   return (
     <div>
       <div className="container">
-        <div className="badge"><Sparkles size={16}/> Excel/Manual-powered finance hub</div>
-
-        <div className="hero">
-          <div className="hero-media">
-            <img src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1600&auto=format&fit=crop" alt="Hero" />
-            <div className="hero-dots"><span/><span/><span/></div>
-          </div>
-          <div className="hero-panel glass">
-            <h1 className="hero-title">Il tuo Wealth Dashboard</h1>
-            <p className="hero-copy">Puoi caricare un Excel/CSV oppure inserire i dati manualmente e vedere subito grafici e riepiloghi.</p>
-            <div className="hero-kpis">
-              <div><div className="kpi-label">Net worth</div><div className="kpi-value">{numberFormat(byMonth.length ? netWorth : null as any)}</div></div>
-              <div><div className="kpi-label">Variazione</div><div className="kpi-value">{byMonth.length>1 ? ((delta>=0?'+':'')+delta.toLocaleString()+` `) : '–'} <span className="kpi-sub">{byMonth.length>1 ? `(${deltaPct.toFixed(1)}%)` : ''}</span></div></div>
-              <div><div className="kpi-label">Account</div><div className="kpi-value">{latestByAccount.length || '–'}</div></div>
-            </div>
-          </div>
-        </div>
-
-        <p className="subtle">Carica un Excel/CSV qui sotto e usa i filtri. Le categorie si popolano dalle intestazioni del file.</p>
+        <div className="badge"><Sparkles size={16}/> Excel-powered finance hub</div>
 
         <div className="row row-2" style={{marginTop:16}}>
           <div className="card">
@@ -268,7 +246,7 @@ export default function App(){
             {loading && <div className="progress" style={{marginTop:8}}><div style={{width: progress + '%'}}/></div>}
             {errorMsg && <div className="badge" style={{marginTop:8, background:"rgba(244,63,94,.15)", borderColor:"rgba(244,63,94,.35)"}}>{errorMsg}</div>}
             <div style={{marginTop:10, display:'flex', gap:8, flexWrap:'wrap'}}>
-              <button className="btn" onClick={downloadTemplate}><FileDown size={14}/> Scarica template</button>
+              <button className="btn"><FileDown size={14}/> Scarica template</button>
               <button className="btn" onClick={()=>{ const v=localStorage.getItem('wd_rows_v21'); if(v) setRows(JSON.parse(v)); }}><HardDrive size={14}/> Carica dati salvati</button>
               <button className="btn" onClick={()=>{ localStorage.removeItem('wd_rows_v21'); setRows([]); }}><Download size={14}/> Pulisci cache</button>
             </div>
@@ -281,10 +259,9 @@ export default function App(){
                 <Search size={16} style={{position:'absolute', left:10, top:10, opacity:.8}}/>
                 <input className="input" style={{paddingLeft:34}} placeholder="Cerca account / categoria / asset" value={query} onChange={(e)=>setQuery(e.target.value)} />
               </div>
-              {/* Categoria dinamica */}
               <select className="select" value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}>
                 <option value="All">All</option>
-                {categories.map(v=> <option key={v} value={v}>{v}</option>)}
+                {Array.from(new Set(normalized.map(r => r.Category || 'Other'))).sort().map(v=> <option key={v} value={v}>{v}</option>)}
               </select>
               <select className="select" value={assetFilter} onChange={(e)=>setAssetFilter(e.target.value)}>
                 {['All','Cash','Equity','Bond','Fund','Crypto','Real Estate','Other'].map(v=> <option key={v} value={v}>{v}</option>)}
@@ -294,13 +271,12 @@ export default function App(){
         </div>
 
         <div className="tabs" style={{marginTop:8}}>
-          {(['Input','Summary','Net Worth','Allocation','Accounts'] as const).map(s => (
+          {(['Summary','Net Worth','Allocation','Accounts'] as const).map(s => (
             <button key={s} className={'tab ' + (section===s? 'active':'')} onClick={()=>setSection(s)}>{s}</button>
           ))}
         </div>
 
         <div style={{marginTop:12}}>
-          {section === 'Input' && (<InputPage initial={(rows as InputRow[]) || []} onSave={(r)=>setRows(r)} />)}
           {section === 'Summary' && (<Pager pages={SummaryPages} index={pageIdx} setIndex={setPageIdx} />)}
           {section === 'Net Worth' && (<Pager pages={NetWorthPages} index={pageIdx} setIndex={setPageIdx} />)}
           {section === 'Allocation' && (<Pager pages={AllocationPages} index={pageIdx} setIndex={setPageIdx} />)}

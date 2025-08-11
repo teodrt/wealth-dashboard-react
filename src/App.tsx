@@ -286,7 +286,7 @@ export default function App(){
                 <Search size={16} style={{position:'absolute', left:10, top:10, opacity:.8}}/>
                 <input className="input" style={{paddingLeft:34}} placeholder="Cerca account / categoria / asset" value={query} onChange={(e)=>setQuery(e.target.value)} />
               </div>
-              <!-- Categoria dinamica -->
+              {/* Categoria dinamica */}
               <select className="select" value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}>
                 <option value="All">All</option>
                 {categories.map(v=> <option key={v} value={v}>{v}</option>)}

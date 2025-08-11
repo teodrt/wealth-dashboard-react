@@ -65,6 +65,8 @@ export default function App(){
   const filtered = useMemo(()=> normalized.filter(r => { const q=query.toLowerCase(); const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true; const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter; const matchesAsset = assetFilter==='All' ? true : r.AssetClass===assetFilter; return matchesQuery && matchesCat && matchesAsset }), [normalized, query, categoryFilter, assetFilter])
   const byMonth = useMemo(()=>{ const map = new Map<string, number>(); filtered.forEach(r => { const k = monthKey(r.Date); map.set(k, (map.get(k)||0)+ (r.Value as number)) }); return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) },[filtered])
   const latestByAccount = useMemo(()=>{ const accDates = new Map<string,string>(); filtered.forEach(r => { const k = r.Account; const m = monthKey(r.Date); if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) }); const totals = new Map<string, number>(); filtered.forEach(r => { const m = monthKey(r.Date); if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) },[filtered])
+
+  // 🔹 DICHIARAZIONI UNICHE (niente duplicati)
   const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
   const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
 
@@ -156,9 +158,6 @@ export default function App(){
     </div>),
   ] : []
 
-  const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
-  const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
-
   const AllocationPages = allocationByAsset.length || allocationByCategory.length ? [
     (<div key="al1" className="card" style={{height:320}}>
       <h3>Allocazione per Asset Class</h3>
@@ -185,31 +184,6 @@ export default function App(){
             <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
             <Legend />
           </PieChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-  ] : []
-
-  const AccountsPages = latestByAccount.length ? [
-    (<div key="ac1" className="card">
-      <h3>Ultima fotografia per account</h3>
-      <div style={{overflowX:'auto'}}>
-        <table><thead><tr><th>Account</th><th>Valore</th></tr></thead><tbody>
-          {latestByAccount.map((r,i)=> (<tr key={i}><td>{r.Account}</td><td style={{fontWeight:600}}>{numberFormat(r.Value as number)}</td></tr>))}
-        </tbody></table>
-      </div>
-    </div>),
-    (<div key="ac2" className="card" style={{height:320}}>
-      <h3>Valore per account (barre)</h3>
-      <div style={{height:250}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={latestByAccount}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-            <XAxis dataKey="Account" stroke="#cbd5e1" interval={0} angle={-20} height={60} />
-            <YAxis stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat().format(v)} />
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} contentStyle={{ background: 'rgba(15,23,42,.9)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12 }} />
-            <Bar dataKey="Value" fill="#60a5fa" radius={[8,8,0,0] as any} />
-          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>),

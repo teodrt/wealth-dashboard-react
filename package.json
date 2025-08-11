@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "version:sync": "node scripts/sync-version.cjs",
+    "release:minor": "node scripts/bump.cjs minor && npm run version:sync && npm run build && node scripts/commit-push.cjs",
+    "release:major": "node scripts/bump.cjs major && npm run version:sync && npm run build && node scripts/commit-push.cjs"
   },
   "dependencies": {
     "framer-motion": "^11.0.0",

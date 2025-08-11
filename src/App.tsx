@@ -124,6 +124,8 @@ export default function App(){
     try {
       const buf = await f.arrayBuffer();
       const worker = new Worker(new URL("./workers/xlsxWorker.ts", import.meta.url), { type: "module" });
+      const __nudger = setInterval(() => { try { if (typeof target !== "undefined" && target.current < 95) target.current = Math.min(95, (target.current || 5) + 1); } catch(e){} }, 120);
+      worker.onerror = (ev) => { try { clearInterval(__nudger); } catch(e){}; };
       const cleanup = () => { try { worker.terminate(); } catch {} inputEl.value=''; }
       worker.onmessage = (ev: MessageEvent<any>) => {
         if (ev.data && ev.data.type === "progress") { target.current = Math.max(target.current, ev.data.value || 0); return; }

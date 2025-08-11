@@ -57,16 +57,36 @@ export default function App(){
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
 
-  // Carica eventuali dati salvati
   useEffect(()=>{ const cached = localStorage.getItem("wd_rows_v21"); if (cached) { try { const p = JSON.parse(cached); if (Array.isArray(p)) setRows(p) } catch {} } }, [])
 
   const data = useMemo(()=> (rows && rows.length? rows : []), [rows])
-  const normalized = useMemo(()=> data.map(r => ({...r, Date: parseDate(r.Date), Account: r.Account?.trim() || 'Manual', Category: r.Category || 'Other', AssetClass: r.AssetClass || 'Other', Currency: r.Currency || 'EUR', Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,})).filter(r => r.Date && !isNaN(r.Value as any)),[data])
-  const filtered = useMemo(()=> normalized.filter(r => { const q=query.toLowerCase(); const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true; const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter; const matchesAsset = assetFilter==='All' ? true : r.AssetClass===assetFilter; return matchesQuery && matchesCat && matchesAsset }), [normalized, query, categoryFilter, assetFilter])
+  const normalized = useMemo(()=> data.map(r => ({
+    ...r,
+    Date: parseDate(r.Date),
+    Account: r.Account?.trim() || 'Manual',
+    Category: r.Category || 'Other',
+    AssetClass: r.AssetClass || 'Other',
+    Currency: r.Currency || 'EUR',
+    Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,
+  })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
+
+  // 🔸 categorie dinamiche dal file
+  const categories = useMemo(
+    () => Array.from(new Set(normalized.map(r => r.Category || 'Other'))).sort(),
+    [normalized]
+  )
+
+  const filtered = useMemo(()=> normalized.filter(r => {
+    const q=query.toLowerCase();
+    const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true;
+    const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter;
+    const matchesAsset = assetFilter==='All' ? true : r.AssetClass===assetFilter;
+    return matchesQuery && matchesCat && matchesAsset
+  }), [normalized, query, categoryFilter, assetFilter])
+
   const byMonth = useMemo(()=>{ const map = new Map<string, number>(); filtered.forEach(r => { const k = monthKey(r.Date); map.set(k, (map.get(k)||0)+ (r.Value as number)) }); return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) },[filtered])
   const latestByAccount = useMemo(()=>{ const accDates = new Map<string,string>(); filtered.forEach(r => { const k = r.Account; const m = monthKey(r.Date); if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) }); const totals = new Map<string, number>(); filtered.forEach(r => { const m = monthKey(r.Date); if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) },[filtered])
 
-  // Allocazioni (dichiarazioni uniche)
   const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
   const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
 
@@ -75,7 +95,6 @@ export default function App(){
   const delta = netWorth - prevNetWorth
   const deltaPct = prevNetWorth ? (delta / prevNetWorth) * 100 : 0
 
-  // Upload Excel/CSV (opzionale)
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if(!f) return
     if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB)."); return; }
@@ -101,7 +120,6 @@ export default function App(){
     }
   }
 
-  // Summary pages
   const SummaryPages = byMonth.length ? [
     (<div key="sum1" className="card">
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3><LayoutGrid size={16}/> Riepilogo KPI</h3><span className="badge">Snapshot</span></div>
@@ -127,7 +145,6 @@ export default function App(){
     </div>),
   ] : []
 
-  // Net worth pages
   const NetWorthPages = byMonth.length ? [
     (<div key="nw1" className="card" style={{height:320}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3><LineIcon size={16}/> Linea</h3><span className="badge">{byMonth.length} mesi</span></div>
@@ -159,7 +176,6 @@ export default function App(){
     </div>),
   ] : []
 
-  // Allocation pages
   const AllocationPages = allocationByAsset.length || allocationByCategory.length ? [
     (<div key="al1" className="card" style={{height:320}}>
       <h3>Allocazione per Asset Class</h3>
@@ -191,7 +207,7 @@ export default function App(){
     </div>),
   ] : []
 
-  // Accounts pages (🔧 questa mancava)
+  // Accounts pages
   const AccountsPages = latestByAccount.length ? [
     (<div key="ac1" className="card">
       <h3>Ultima fotografia per account</h3>
@@ -270,8 +286,10 @@ export default function App(){
                 <Search size={16} style={{position:'absolute', left:10, top:10, opacity:.8}}/>
                 <input className="input" style={{paddingLeft:34}} placeholder="Cerca account / categoria / asset" value={query} onChange={(e)=>setQuery(e.target.value)} />
               </div>
+              <!-- Categoria dinamica -->
               <select className="select" value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}>
-                {['All','Cash','Brokerage','Pension','Real Estate','Loan','Other'].map(v=> <option key={v} value={v}>{v}</option>)}
+                <option value="All">All</option>
+                {categories.map(v=> <option key={v} value={v}>{v}</option>)}
               </select>
               <select className="select" value={assetFilter} onChange={(e)=>setAssetFilter(e.target.value)}>
                 {['All','Cash','Equity','Bond','Fund','Crypto','Real Estate','Other'].map(v=> <option key={v} value={v}>{v}</option>)}
@@ -296,7 +314,7 @@ export default function App(){
 
         {!data.length && (
           <div className="card" style={{marginTop:24}}>
-            Nessun dato ancora. Vai su <b>Input</b> per inserirli manualmente oppure carica un file sopra.
+            Nessun dato ancora. Carica un file sopra.
           </div>
         )}
       </div>

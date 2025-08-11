@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { Upload as UploadIcon, FileDown, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as XLSX from 'xlsx'
+import InputPage, { BalanceRow as InputRow } from './InputPage'
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number }
 
@@ -19,7 +20,7 @@ function parseDate(input: any): string {
 function numberFormat(n: number | undefined | null) { if (n == null || isNaN(n as any)) return '–'; return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) }
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
 function downloadTemplate() {
-  const rows: BalanceRow[] = [{ Date: '2025-01-31', Account: 'Conto Corrente', Category: 'Cash', AssetClass: 'Cash', Currency: 'EUR', Value: 1000 }]
+  const rows: BalanceRow[] = [{ Date: '2025-01-31', Account: 'Manual', Category: 'Esempio', AssetClass: 'Cash', Currency: 'EUR', Value: 1000 }]
   const ws = XLSX.utils.json_to_sheet(rows as any)
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Balances')
   const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })
@@ -50,30 +51,32 @@ export default function App(){
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
   const [assetFilter, setAssetFilter] = useState<string>('All')
-  const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'>('Summary')
+  const [section, setSection] = useState<'Input'|'Summary'|'Net Worth'|'Allocation'|'Accounts'>('Input')
   const [pageIdx, setPageIdx] = useState(0)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
 
-  useEffect(()=>{ const cached = localStorage.getItem("wd_rows_v21"); if (cached) { try { const p = JSON.parse(cached); if (Array.isArray(p) && p.length) setRows(p) } catch {} } }, [])
+  // Carica eventuali dati salvati
+  useEffect(()=>{ const cached = localStorage.getItem("wd_rows_v21"); if (cached) { try { const p = JSON.parse(cached); if (Array.isArray(p)) setRows(p) } catch {} } }, [])
 
   const data = useMemo(()=> (rows && rows.length? rows : []), [rows])
-  const normalized = useMemo(()=> data.map(r => ({...r, Date: parseDate(r.Date), Account: r.Account?.trim() || 'Unknown', Category: r.Category || 'Other', AssetClass: r.AssetClass || 'Other', Currency: r.Currency || 'EUR', Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,})).filter(r => r.Date && !isNaN(r.Value as any)),[data])
+  const normalized = useMemo(()=> data.map(r => ({...r, Date: parseDate(r.Date), Account: r.Account?.trim() || 'Manual', Category: r.Category || 'Other', AssetClass: r.AssetClass || 'Other', Currency: r.Currency || 'EUR', Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,})).filter(r => r.Date && !isNaN(r.Value as any)),[data])
   const filtered = useMemo(()=> normalized.filter(r => { const q=query.toLowerCase(); const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true; const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter; const matchesAsset = assetFilter==='All' ? true : r.AssetClass===assetFilter; return matchesQuery && matchesCat && matchesAsset }), [normalized, query, categoryFilter, assetFilter])
-  const byMonth = useMemo(()=>{ const map = new Map<string, number>(); filtered.forEach(r => { const k = r.Date.slice(0,7); map.set(k, (map.get(k)||0)+ (r.Value as number)) }); return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) },[filtered])
-  const latestByAccount = useMemo(()=>{ const accDates = new Map<string,string>(); filtered.forEach(r => { const k = r.Account; const m = r.Date.slice(0,7); if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) }); const totals = new Map<string, number>(); filtered.forEach(r => { const m = r.Date.slice(0,7); if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) },[filtered])
-  const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (r.Date.slice(0,7) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
-  const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (r.Date.slice(0,7) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
+  const byMonth = useMemo(()=>{ const map = new Map<string, number>(); filtered.forEach(r => { const k = monthKey(r.Date); map.set(k, (map.get(k)||0)+ (r.Value as number)) }); return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) },[filtered])
+  const latestByAccount = useMemo(()=>{ const accDates = new Map<string,string>(); filtered.forEach(r => { const k = r.Account; const m = monthKey(r.Date); if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) }); const totals = new Map<string, number>(); filtered.forEach(r => { const m = monthKey(r.Date); if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) },[filtered])
+  const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
+  const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
 
   const netWorth = byMonth.length ? byMonth[byMonth.length-1].value : 0
   const prevNetWorth = byMonth.length>1 ? byMonth[byMonth.length-2].value : 0
   const delta = netWorth - prevNetWorth
   const deltaPct = prevNetWorth ? (delta / prevNetWorth) * 100 : 0
 
+  // Upload Excel/CSV (opzionale)
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if(!f) return
-    if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB). Dividi per anni o fogli."); return; }
+    if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB)."); return; }
     setErrorMsg(null); setLoading(true); setProgress(0);
     try {
       const buf = await f.arrayBuffer();
@@ -96,6 +99,7 @@ export default function App(){
     }
   }
 
+  // Pagine
   const SummaryPages = byMonth.length ? [
     (<div key="sum1" className="card">
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h3><LayoutGrid size={16}/> Riepilogo KPI</h3><span className="badge">Snapshot</span></div>
@@ -151,6 +155,9 @@ export default function App(){
       </div>
     </div>),
   ] : []
+
+  const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
+  const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
 
   const AllocationPages = allocationByAsset.length || allocationByCategory.length ? [
     (<div key="al1" className="card" style={{height:320}}>
@@ -213,7 +220,7 @@ export default function App(){
   return (
     <div>
       <div className="container">
-        <div className="badge"><Sparkles size={16}/> Excel-powered finance hub</div>
+        <div className="badge"><Sparkles size={16}/> Excel/Manual-powered finance hub</div>
 
         <div className="hero">
           <div className="hero-media">
@@ -221,8 +228,8 @@ export default function App(){
             <div className="hero-dots"><span/><span/><span/></div>
           </div>
           <div className="hero-panel glass">
-            <h1 className="hero-title">Wealth Dashboard</h1>
-            <p className="hero-copy">Carica il tuo Excel/CSV e sfoglia Net Worth, Allocazioni e Account con transizioni fluide.</p>
+            <h1 className="hero-title">Il tuo Wealth Dashboard</h1>
+            <p className="hero-copy">Puoi caricare un Excel/CSV oppure inserire i dati manualmente e vedere subito grafici e riepiloghi.</p>
             <div className="hero-kpis">
               <div><div className="kpi-label">Net worth</div><div className="kpi-value">{numberFormat(byMonth.length ? netWorth : null as any)}</div></div>
               <div><div className="kpi-label">Variazione</div><div className="kpi-value">{byMonth.length>1 ? ((delta>=0?'+':'')+delta.toLocaleString()+` `) : '–'} <span className="kpi-sub">{byMonth.length>1 ? `(${deltaPct.toFixed(1)}%)` : ''}</span></div></div>
@@ -231,15 +238,15 @@ export default function App(){
           </div>
         </div>
 
-        <p className="subtle">Carica un file <b>.xlsx</b> o <b>.csv</b> con il foglio <b>Balances</b> (Date, Account, Category, AssetClass, Currency, Value). Scorri le pagine con frecce ⬅️➡️ o swipe.</p>
+        <p className="subtle">Vai su <b>Input</b> per inserire dati a mano, oppure usa l’upload (opzionale) qui sotto.</p>
 
         <div className="row row-2" style={{marginTop:16}}>
           <div className="card">
-            <h3><UploadIcon size={16}/> Carica il tuo file</h3>
+            <h3><UploadIcon size={16}/> Carica file (opzionale)</h3>
             <label className="upload">
               <div style={{textAlign:'center'}}>
                 <UploadIcon size={22} />
-                <div className="subtle" style={{marginTop:6, fontSize:13}}>Trascina qui il file oppure clicca</div>
+                <div className="subtle" style={{marginTop:6, fontSize:13}}>Trascina il file oppure clicca</div>
                 <div className="subtle" style={{fontSize:12}}>Accettiamo .xlsx e .csv</div>
               </div>
               <input type="file" accept=".xlsx,.csv" style={{display:'none'}} onChange={onFile} />
@@ -250,9 +257,10 @@ export default function App(){
             <div style={{marginTop:10, display:'flex', gap:8, flexWrap:'wrap'}}>
               <button className="btn" onClick={downloadTemplate}><FileDown size={14}/> Scarica template</button>
               <button className="btn" onClick={()=>{ const v=localStorage.getItem('wd_rows_v21'); if(v) setRows(JSON.parse(v)); }}><HardDrive size={14}/> Carica dati salvati</button>
-              <button className="btn" onClick={()=>{ localStorage.removeItem('wd_rows_v21'); }}><Download size={14}/> Pulisci cache</button>
+              <button className="btn" onClick={()=>{ localStorage.removeItem('wd_rows_v21'); setRows([]); }}><Download size={14}/> Pulisci cache</button>
             </div>
           </div>
+
           <div className="card">
             <h3><Filter size={16}/> Filtri</h3>
             <div className="controls">
@@ -270,13 +278,14 @@ export default function App(){
           </div>
         </div>
 
-        <div className="tabs">
-          {(['Summary','Net Worth','Allocation','Accounts'] as const).map(s => (
+        <div className="tabs" style={{marginTop:8}}>
+          {(['Input','Summary','Net Worth','Allocation','Accounts'] as const).map(s => (
             <button key={s} className={'tab ' + (section===s? 'active':'')} onClick={()=>setSection(s)}>{s}</button>
           ))}
         </div>
 
         <div style={{marginTop:12}}>
+          {section === 'Input' && (<InputPage initial={(rows as InputRow[]) || []} onSave={(r)=>setRows(r)} />)}
           {section === 'Summary' && (<Pager pages={SummaryPages} index={pageIdx} setIndex={setPageIdx} />)}
           {section === 'Net Worth' && (<Pager pages={NetWorthPages} index={pageIdx} setIndex={setPageIdx} />)}
           {section === 'Allocation' && (<Pager pages={AllocationPages} index={pageIdx} setIndex={setPageIdx} />)}
@@ -285,11 +294,9 @@ export default function App(){
 
         {!data.length && (
           <div className="card" style={{marginTop:24}}>
-            Nessun dato caricato. Usa il bottone <b>Carica il tuo file</b> qui sopra oppure <b>Scarica template</b> per iniziare.
+            Nessun dato ancora. Vai su <b>Input</b> per inserirli manualmente oppure carica un file sopra.
           </div>
         )}
-
-        <div className="subtle" style={{textAlign:'center', marginTop:24, fontSize:12}}>Made with ❤️ — parsing in worker con barra di progresso; UI glass + transizioni fluide; cache locale opzionale.</div>
       </div>
     </div>
   )

@@ -8,9 +8,7 @@ export default defineConfig({
   },
   envPrefix: 'VITE_',
   server: {
-    headers: {
-      'Content-Security-Policy': "script-src 'self' 'unsafe-eval' 'unsafe-inline'; object-src 'none';"
-    }
+    // CSP headers removed to avoid conflicts with HTML meta tag
   },
   build: {
     rollupOptions: {

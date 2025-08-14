@@ -1,5 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
+import { CSP_DEV, CSP_PROD } from './src/lib/csp'
+
+const isDev = process.env.NODE_ENV !== 'production'
+const csp = isDev ? CSP_DEV : CSP_PROD
 
 export default defineConfig({ 
   plugins: [react()],
@@ -8,7 +12,18 @@ export default defineConfig({
   },
   envPrefix: 'VITE_',
   server: {
-    // CSP headers removed to avoid conflicts with HTML meta tag
+    headers: {
+      "Content-Security-Policy": csp,
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "strict-origin-when-cross-origin"
+    }
+  },
+  preview: {
+    headers: {
+      "Content-Security-Policy": csp,
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "strict-origin-when-cross-origin"
+    }
   },
   build: {
     rollupOptions: {

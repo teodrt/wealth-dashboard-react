@@ -19,6 +19,7 @@
     "release:major": "node scripts/bump.cjs major && npm run version:sync && npm run build && node scripts/commit-push.cjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.6",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",

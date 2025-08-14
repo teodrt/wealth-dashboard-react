@@ -1,0 +1,48 @@
+commit 947f4f4e9949a3e66195766fa0bec69098b8ca30
+2025-08-11 17:58:36 +0200 947f4f4 Setup versioning system v1.1
+commit 4df4d061ebbc970ed68b680568008171c76ee4e1
+2025-08-11 17:50:32 +0200 4df4d06 Smoother progress (more worker ticks, cap 99) + stop nudger on result
+commit 689cb207d48369ccaa7df9c7761b4aff8bbae2a9
+2025-08-11 17:45:07 +0200 689cb20 Revert XLSX import to standard + chunked progress + nudger + glass import
+commit b554a81c521f367cb4250988370392047bf5398a
+2025-08-11 17:26:33 +0200 b554a81 Force styles import + version stamp [2025.08.11-1726]
+commit d3b05023f64a4a8e8cee403e1240a365a36a2f0f
+2025-08-11 17:17:20 +0200 d3b0502 Chunked parsing + glass categories (Build 2025.08.11-1717)
+commit b57937a83d50258a9149c14673afd6fb994fc866
+2025-08-11 15:25:22 +0200 b57937a UX: smooth progress + input reset; new Categories section with glass design; chart margin fixes
+commit a895bc6de0995c49359c43c1520c633efc8a6f49
+2025-08-11 15:10:12 +0200 a895bc6 Worker progress + stop at empty cell; App onFile reset + chart margins
+commit f00f9fe0f879cb4e66fb1bec0b5d3f0711c8f6f9
+2025-08-11 14:46:34 +0200 f00f9fe Charts: prevent clipped Y-axis labels (margins + YAxis width)
+commit 9d2db874965f077f5d1af28e3a790ba381958e8a
+2025-08-11 14:06:51 +0200 9d2db87 Parser: stop on first empty category cell per row; multi-category columns
+commit ebc479f730408efc56d9b05da003eae414be6461
+2025-08-11 13:57:56 +0200 ebc479f Fix JSX: replace HTML comment with JSX comment
+commit d8310cb9f1f7edf4971a95a35300d91da230fc0f
+2025-08-11 13:56:19 +0200 d8310cb UI: dynamic category filter from uploaded columns
+commit 6f9fb60b9597587c55f2ca4282034b9e2d5cca80
+2025-08-11 13:30:27 +0200 6f9fb60 Parser 3 colonne (Anno, Mese, categorie es. N26) con mesi IT e numeri con punti
+commit 8f135504dbb989c48e9a169906026b67783e2df4
+2025-08-11 13:01:15 +0200 8f13550 Fix: add missing AccountsPages
+commit 7cdb5c2ad9cf4511228c1f7d5b365f581f1bccd6
+2025-08-11 12:50:24 +0200 7cdb5c2 Fix: remove duplicate declarations (allocation vars)
+commit 75ee1f74b856184df0b3f6b743d6cf4e73fa3e03
+2025-08-11 12:42:09 +0200 75ee1f7 Add Input tab wired to charts
+commit f7ba3dbd319cb467b99567cd33ed80247371a780
+2025-08-11 12:12:08 +0200 f7ba3db Aggiunta pagina Input manuale
+commit f9714acc308df47e7884f6a31974e076528841c0
+2025-08-11 11:51:33 +0200 f9714ac v2.1: UI glass, worker parsing, progress bar, pager
+commit 9d5962bd3f615cb0a84b0bcbb41d71c64048a88e
+2025-08-11 11:41:10 +0200 9d5962b Nuova versione con design aggiornato e fix upload Excel
+commit 881f321668a9bb43b33d98026830d678cf053445
+2025-08-11 11:38:55 +0200 881f321 Versione completa cool UI
+commit 6d08cbc362d03380481331904f8d69504e029165
+2025-08-11 08:28:15 +0200 6d08cbc Pulizia repo e caricamento nuova versione
+commit 34b2e7bd43a111ad0ebe0a940f5305dfb37190ba
+2025-08-10 20:29:41 +0200 34b2e7b Add files via upload
+commit 6e3a45b3d0238d7957eac3cdf4a08f657a6ad625
+2025-08-10 19:58:37 +0200 6e3a45b Add files via upload
+commit 376dfcdbf5af48505e99071aa71049448ea73f48
+2025-08-10 19:57:26 +0200 376dfcd Delete wealth-dashboard-react-full.zip
+commit 27377476b6d7d7f88ca4de1a2a9152066fbb0300
+2025-08-10 18:30:50 +0200 2737747 Add files via upload

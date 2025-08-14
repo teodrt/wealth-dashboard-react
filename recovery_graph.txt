@@ -1,0 +1,24 @@
+* 947f4f4 (HEAD -> main, origin/main, origin/HEAD) Setup versioning system v1.1
+* 4df4d06 Smoother progress (more worker ticks, cap 99) + stop nudger on result
+* 689cb20 Revert XLSX import to standard + chunked progress + nudger + glass import
+* b554a81 Force styles import + version stamp [2025.08.11-1726]
+* d3b0502 Chunked parsing + glass categories (Build 2025.08.11-1717)
+* b57937a UX: smooth progress + input reset; new Categories section with glass design; chart margin fixes
+* a895bc6 Worker progress + stop at empty cell; App onFile reset + chart margins
+* f00f9fe Charts: prevent clipped Y-axis labels (margins + YAxis width)
+* 9d2db87 Parser: stop on first empty category cell per row; multi-category columns
+* ebc479f Fix JSX: replace HTML comment with JSX comment
+* d8310cb UI: dynamic category filter from uploaded columns
+* 6f9fb60 Parser 3 colonne (Anno, Mese, categorie es. N26) con mesi IT e numeri con punti
+* 8f13550 Fix: add missing AccountsPages
+* 7cdb5c2 Fix: remove duplicate declarations (allocation vars)
+* 75ee1f7 Add Input tab wired to charts
+* f7ba3db Aggiunta pagina Input manuale
+* f9714ac v2.1: UI glass, worker parsing, progress bar, pager
+* 9d5962b Nuova versione con design aggiornato e fix upload Excel
+* 881f321 Versione completa cool UI
+* 6d08cbc Pulizia repo e caricamento nuova versione
+* 34b2e7b Add files via upload
+* 6e3a45b Add files via upload
+* 376dfcd Delete wealth-dashboard-react-full.zip
+* 2737747 Add files via upload

@@ -1,29 +1,50 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid } from 'recharts'
-import { Upload as UploadIcon, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive, BookOpen } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid } from 'recharts';
+import { Upload as UploadIcon, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive, BookOpen, X } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
-type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number }
+// Import v2.52 components
+import GlassCard from './components/GlassCard';
+import WallStreetTicker from './components/market/WallStreetTicker';
+import NewsHub from './components/insights/NewsHub';
+import FiltersBar from './components/FiltersBar';
+
+type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number };
 
 function parseDate(input: any): string {
-  if (input == null || input === '') return ''
+  if (input == null || input === '') return '';
   if (typeof input === 'number') {
-    const epoch = (XLSX.SSF as any)?.parse_date_code?.(input)
+    const epoch = (XLSX.SSF as any)?.parse_date_code?.(input);
     if (epoch) { const d = new Date(epoch.y, (epoch.m || 1) - 1, epoch.d || 1); return d.toISOString().slice(0,10) }
   }
-  const d = new Date(input)
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0,10)
-  return String(input)
+  const d = new Date(input);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  return String(input);
 }
-function numberFormat(n: number | undefined | null) { if (n == null || isNaN(n as any)) return '–'; return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) }
+
+function numberFormat(n: number | undefined | null) { 
+  if (n == null || isNaN(n as any)) return '–'; 
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) 
+}
+
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
 
-function useKeyNav(onLeft: ()=>void, onRight: ()=>void){ useEffect(()=>{ const h=(e:KeyboardEvent)=>{ if(e.key==='ArrowLeft') onLeft(); if(e.key==='ArrowRight') onRight(); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onLeft,onRight]) }
+function useKeyNav(onLeft: ()=>void, onRight: ()=>void){ 
+  useEffect(()=>{ 
+    const h=(e:KeyboardEvent)=>{ 
+      if(e.key==='ArrowLeft') onLeft(); 
+      if(e.key==='ArrowRight') onRight(); 
+    }; 
+    window.addEventListener('keydown',h); 
+    return ()=>window.removeEventListener('keydown',h); 
+  },[onLeft,onRight]) 
+}
+
 function Pager({ pages, index, setIndex }:{ pages: React.ReactNode[]; index: number; setIndex:(i:number)=>void; }){
   const safeIndex = pages.length? ((index % pages.length) + pages.length) % pages.length : 0
   const paginate = useCallback((dir:number)=>{ if(!pages.length) return; setIndex(index + dir) },[index,setIndex,pages.length])
   useKeyNav(()=>paginate(-1), ()=>paginate(1))
-  if(!pages.length) return <div className="card glass">Nessuna pagina da mostrare.</div>
+  if(!pages.length) return <GlassCard className="pager-empty">Nessuna pagina da mostrare.</GlassCard>
   return (
     <div className="pager">
       <button className="nav-btn left" onClick={()=>paginate(-1)}><ChevronLeft size={18}/></button>
@@ -40,7 +61,7 @@ export default function App(){
   const [rows, setRows] = useState<BalanceRow[] | null>(null)
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
-  const [assetFilter, setAssetFilter] = useState<string>('All')
+  const [accountFilter, setAccountFilter] = useState<string>('All')
   const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'|'Categories'>('Summary')
   const [pageIdx, setPageIdx] = useState(0)
 
@@ -50,6 +71,7 @@ export default function App(){
   const smooth = useRef<number>(0)
   const target = useRef<number>(0)
   const timer = useRef<any>(null)
+  const workerRef = useRef<Worker | null>(null)
 
   useEffect(()=>{ const v=localStorage.getItem("wd_rows_v21"); if(v){ try{ const p=JSON.parse(v); if(Array.isArray(p)) setRows(p) }catch{}} }, [])
 
@@ -79,270 +101,436 @@ export default function App(){
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
 
   const categories = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Category || 'Other'))).sort(), [normalized])
+  const accounts = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort(), [normalized])
 
   const filtered = useMemo(()=> normalized.filter(r => {
     const q=query.toLowerCase();
     const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true;
     const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter;
-    const matchesAsset = assetFilter==='All' ? true : r.AssetClass===assetFilter;
-    return matchesQuery && matchesCat && matchesAsset
-  }), [normalized, query, categoryFilter, assetFilter])
+    const matchesAccount = accountFilter==='All' ? true : r.Account===accountFilter;
+    return matchesQuery && matchesCat && matchesAccount
+  }), [normalized, query, categoryFilter, accountFilter])
 
-  const byMonth = useMemo(()=>{ const map = new Map<string, number>(); filtered.forEach(r => { const k = monthKey(r.Date); map.set(k, (map.get(k)||0)+ (r.Value as number)) }); return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) },[filtered])
+  const byMonth = useMemo(()=>{ 
+    const map = new Map<string, number>(); 
+    filtered.forEach(r => { 
+      const k = monthKey(r.Date); 
+      map.set(k, (map.get(k)||0)+ (r.Value as number)) 
+    }); 
+    return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) 
+  },[filtered])
 
-  const latestByAccount = useMemo(()=>{ const accDates = new Map<string,string>(); filtered.forEach(r => { const k = r.Account; const m = monthKey(r.Date); if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) }); const totals = new Map<string, number>(); filtered.forEach(r => { const m = monthKey(r.Date); if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) },[filtered])
+  const latestByAccount = useMemo(()=>{ 
+    const accDates = new Map<string,string>(); 
+    filtered.forEach(r => { 
+      const k = r.Account; 
+      const m = monthKey(r.Date); 
+      if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) 
+    }); 
+    const totals = new Map<string, number>(); 
+    filtered.forEach(r => { 
+      const m = monthKey(r.Date); 
+      if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) 
+    }); 
+    return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) 
+  },[filtered])
 
-  const allocationByAsset = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
-  const allocationByCategory = useMemo(()=>{ const totals = new Map<string,number>(); const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; filtered.forEach(r => { if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) }); return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) },[filtered, byMonth])
+  const allocationByAsset = useMemo(()=>{ 
+    const totals = new Map<string,number>(); 
+    const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; 
+    filtered.forEach(r => { 
+      if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) 
+    }); 
+    return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) 
+  },[filtered, byMonth])
+
+  const allocationByCategory = useMemo(()=>{ 
+    const totals = new Map<string,number>(); 
+    const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; 
+    filtered.forEach(r => { 
+      if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) 
+    }); 
+    return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) 
+  },[filtered, byMonth])
 
   const seriesByCategory = useMemo(()=>{
     const obj: Record<string, {month:string, value:number}[]> = {}
     categories.forEach(c => { obj[c] = [] })
-    const map = new Map<string, Map<string, number>>()
-    normalized.forEach(r=>{
-      const c = r.Category || 'Other'; const m = monthKey(r.Date)
-      if(!map.has(c)) map.set(c, new Map())
-      const inner = map.get(c)!; inner.set(m, (inner.get(m)||0) + (r.Value as number))
-    })
-    for (const c of categories) {
-      const inner = map.get(c) || new Map()
-      obj[c] = Array.from(inner.entries()).map(([month, value])=>({month, value})).sort((a,b)=>a.month.localeCompare(b.month))
-    }
-    return obj
-  },[normalized, categories])
-
-  const netWorth = byMonth.length ? byMonth[byMonth.length-1].value : 0
-  const prevNetWorth = byMonth.length>1 ? byMonth[byMonth.length-2].value : 0
-  const delta = netWorth - prevNetWorth
-  const deltaPct = prevNetWorth ? (delta / prevNetWorth) * 100 : 0
-
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const inputEl = e.target as HTMLInputElement;
-    const f = inputEl.files?.[0]; if(!f) { inputEl.value=''; return }
-    if (f.size > 30 * 1024 * 1024) { setErrorMsg("File troppo grande (>30MB)."); inputEl.value=''; return; }
-    setErrorMsg(null); setLoading(true); setProgress(1); smooth.current = 1; target.current = 5;
-    try {
-      const buf = await f.arrayBuffer();
-      const worker = new Worker(new URL("./workers/xlsxWorker.ts", import.meta.url), { type: "module" });
-      const __nudger = setInterval(() => { try { if (typeof target !== "undefined" && target.current < 95) target.current = Math.min(95, (target.current || 5) + 1); } catch(e){} }, 120);
-      worker.onerror = (ev) => { try { clearInterval(__nudger); } catch(e){}; };
-      const cleanup = () => { try { worker.terminate(); } catch {} inputEl.value=''; }
-      worker.onmessage = (ev: MessageEvent<any>) => {
-        if (ev.data && ev.data.type === "progress") { target.current = Math.max(target.current, ev.data.value || 0); return; }
-        if (ev.data && ev.data.type === "result") {
-          try { if (typeof __nudger !== "undefined") clearInterval(__nudger); } catch(e){}
-          if (!ev.data.ok) { setErrorMsg(ev.data.error || "Errore di parsing"); setLoading(false); cleanup(); return; }
-          setRows(ev.data.rows || []);
-          try { localStorage.setItem("wd_rows_v21", JSON.stringify(ev.data.rows || [])); } catch {}
-          target.current = 100; setProgress(100); setLoading(false); cleanup();
+    filtered.forEach(r => {
+      const month = monthKey(r.Date)
+      const category = r.Category || 'Other'
+      if (obj[category]) {
+        const existing = obj[category].find(item => item.month === month)
+        if (existing) {
+          existing.value += r.Value as number
+        } else {
+          obj[category].push({ month, value: r.Value as number })
         }
-      };
-      worker.postMessage({ buffer: buf, name: f.name }, [buf as any]);
+      }
+    })
+    return Object.entries(obj).map(([name, data]) => ({
+      name,
+      data: data.sort((a, b) => a.month.localeCompare(b.month))
+    }))
+  }, [filtered, categories])
+
+  const onFile = useCallback(async (file: File) => {
+    try {
+      setLoading(true)
+      setErrorMsg(null)
+      setProgress(0)
+      smooth.current = 0
+      target.current = 0
+
+      const buffer = await file.arrayBuffer()
+      
+      // Use Web Worker for parsing
+      if (workerRef.current) {
+        workerRef.current.terminate()
+      }
+      
+      workerRef.current = new Worker(new URL('./workers/xlsxWorker.ts', import.meta.url))
+      
+      workerRef.current.onmessage = (e) => {
+        const { type, progress, data, error } = e.data
+        
+        if (type === 'progress') {
+          target.current = progress || 0
+        } else if (type === 'complete') {
+          const parsedRows = data.map((row: any) => ({
+            Date: row.Date || row.A || row['1'] || '',
+            Account: row.Account || row.B || row['2'] || 'Unknown',
+            Category: row.Category || row.C || row['3'] || 'Other',
+            AssetClass: row.AssetClass || row.D || row['4'] || 'Other',
+            Currency: row.Currency || row.E || row['5'] || 'EUR',
+            Value: Number(row.Value || row.F || row['6'] || 0)
+          })).filter((r: any) => r.Date && !isNaN(r.Value))
+          
+          setRows(parsedRows)
+          localStorage.setItem("wd_rows_v21", JSON.stringify(parsedRows))
+          setLoading(false)
+          target.current = 100
+        } else if (type === 'error') {
+          setErrorMsg(error || 'Parsing failed')
+          setLoading(false)
+        }
+      }
+      
+      workerRef.current.postMessage({
+        type: 'parse',
+        data: buffer,
+        id: Date.now().toString()
+      })
+      
     } catch (err: any) {
-      setLoading(false);
-      setErrorMsg(err?.message || "Errore di caricamento");
-      inputEl.value='';
+      setErrorMsg(err?.message || 'Upload failed')
+      setLoading(false)
     }
-  }
+  }, [])
 
-  const SummaryPages = byMonth.length ? [
-    (<div key="sum1" className="card glass">
-      <div className="row" style={{gridTemplateColumns:'repeat(3,1fr)'}}>
-        <div className="card glass"><div className="subtle">Net worth</div><div className="big">{numberFormat(netWorth)}</div></div>
-        <div className="card glass"><div className="subtle">Variazione</div><div className="big">{(delta>=0?'+':'')+numberFormat(delta)} <span className="subtle">({deltaPct.toFixed(1)}%)</span></div></div>
-        <div className="card glass"><div className="subtle">Account</div><div className="big">{Array.from(new Set(filtered.map(r=>r.Account))).length}</div></div>
-      </div>
-    </div>),
-    (<div key="sum2" className="card glass" style={{height:340}}>
-      <h3><TrendingUp size={16}/> Net worth nel tempo</h3>
-      <div style={{height:280}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-            <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-            <Line type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={3} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-  ] : []
+  const resetFilters = useCallback(() => {
+    setQuery('')
+    setCategoryFilter('All')
+    setAccountFilter('All')
+  }, [])
 
-  const NetWorthPages = byMonth.length ? [
-    (<div key="nw1" className="card glass" style={{height:320}}>
-      <h3><LineIcon size={16}/> Linea</h3>
-      <div style={{height:250}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-            <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-            <Line type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={3} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-    (<div key="nw2" className="card glass" style={{height:320}}>
-      <h3><PieIcon size={16}/> Barre</h3>
-      <div style={{height:250}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={byMonth} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-            <XAxis dataKey="month" stroke="#cbd5e1" />
-            <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-            <Bar dataKey="value" fill="#a78bfa" radius={[8,8,0,0] as any} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-  ] : []
+  const clearAllData = useCallback(() => {
+    setRows(null)
+    localStorage.removeItem("wd_rows_v21")
+    resetFilters()
+  }, [resetFilters])
 
-  const AllocationPages = allocationByAsset.length || allocationByCategory.length ? [
-    (<div key="al1" className="card glass" style={{height:320}}>
-      <h3>Allocazione per Asset Class</h3>
-      <div style={{height:250}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={allocationByAsset} dataKey="value" nameKey="name" outerRadius={95} innerRadius={60} paddingAngle={3}>
-              {allocationByAsset.map((_, i) => (<Cell key={i} fill={['#60a5fa','#a78bfa','#34d399','#f472b6','#f59e0b','#22d3ee','#e879f9'][i%7]} />))}
-            </Pie>
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-    (<div key="al2" className="card glass" style={{height:320}}>
-      <h3>Allocazione per Categoria</h3>
-      <div style={{height:250}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={allocationByCategory} dataKey="value" nameKey="name" outerRadius={95} innerRadius={60} paddingAngle={3}>
-              {allocationByCategory.map((_, i) => (<Cell key={i} fill={['#34d399','#60a5fa','#a78bfa','#f59e0b','#22d3ee','#f472b6'][i%6]} />))}
-            </Pie>
-            <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    </div>),
-  ] : []
+  const netWorth = useMemo(() => {
+    if (!filtered.length) return 0
+    const latestMonth = byMonth.length ? byMonth[byMonth.length - 1].month : ''
+    return filtered
+      .filter(r => monthKey(r.Date) === latestMonth)
+      .reduce((sum, r) => sum + (r.Value as number), 0)
+  }, [filtered, byMonth])
 
-  const colorPool = ['#60a5fa','#a78bfa','#34d399','#f59e0b','#22d3ee','#f472b6','#eab308','#fb7185','#4ade80','#38bdf8']
-  const CategoryPages = categories.map((cat, i) => {
-    const series = seriesByCategory[cat] || []
-    const total = series.length ? series[series.length-1].value : 0
-    const prev = series.length>1 ? series[series.length-2].value : 0
-    const d = total - prev
-    const col = colorPool[i % colorPool.length]
-    return (
-      <div key={cat} className="card glass cat-card">
-        <div className="cat-hero" style={{ background: `linear-gradient(135deg, ${col}33, transparent)`}}>
-          <div className="cat-title"><BookOpen size={16}/> {cat}</div>
-          <div className="cat-value">{numberFormat(total)}</div>
-          <div className="cat-delta">{(d>=0?'+':'') + numberFormat(d)}</div>
-        </div>
-        <div style={{height:220, marginTop:8}}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="month" stroke="#cbd5e1" />
-              <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
-              <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-              <Line type="monotone" dataKey="value" stroke={col} strokeWidth={3} dot={false} />
+  const previousNetWorth = useMemo(() => {
+    if (byMonth.length < 2) return 0
+    const previousMonth = byMonth[byMonth.length - 2].month
+    return filtered
+      .filter(r => monthKey(r.Date) === previousMonth)
+      .reduce((sum, r) => sum + (r.Value as number), 0)
+  }, [filtered, byMonth])
+
+  const delta = netWorth - previousNetWorth
+  const deltaPct = previousNetWorth ? (delta / previousNetWorth) * 100 : 0
+
+  const pages = [
+    <div key="summary" className="summary-page">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <GlassCard className="metric-card">
+          <h3>Total Wealth</h3>
+          <div className="metric-value">{numberFormat(netWorth)}</div>
+        </GlassCard>
+        <GlassCard className="metric-card">
+          <h3>Change vs Previous Month</h3>
+          <div className={`metric-value ${delta >= 0 ? 'positive' : 'negative'}`}>
+            {delta >= 0 ? '+' : ''}{numberFormat(delta)} ({deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%)
+          </div>
+        </GlassCard>
+        <GlassCard className="metric-card">
+          <h3>Accounts</h3>
+          <div className="metric-value">{accounts.length}</div>
+        </GlassCard>
+        <GlassCard className="metric-card">
+          <h3>Categories</h3>
+          <div className="metric-value">{categories.length}</div>
+        </GlassCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GlassCard className="chart-card">
+          <h3>Net Worth Over Time</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={byMonth}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip formatter={(value) => numberFormat(value as number)} />
+              <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </GlassCard>
+
+        <GlassCard className="chart-card">
+          <h3>Allocation by Category</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={allocationByCategory}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {allocationByCategory.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={`hsl(${index * 60}, 70%, 50%)`} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => numberFormat(value as number)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </GlassCard>
       </div>
-    )
-  })
+    </div>,
 
-  useEffect(()=>{ setPageIdx(0) }, [section])
-
-  return (
-    <div>
-      <div className="container">
-        <div className="badge"><Sparkles size={16}/> Excel-powered finance hub</div>
-
-        <div className="row row-2" style={{marginTop:16}}>
-          <div className="card glass">
-            <h3><UploadIcon size={16}/> Carica file (opzionale)</h3>
-            <label className="upload">
-              <div style={{textAlign:'center'}}>
-                <UploadIcon size={22} />
-                <div className="subtle" style={{marginTop:6, fontSize:13}}>Trascina il file oppure clicca</div>
-                <div className="subtle" style={{fontSize:12}}>Accettiamo .xlsx e .csv</div>
-              </div>
-              <input type="file" accept=".xlsx,.csv" style={{display:'none'}} onChange={onFile} />
-            </label>
-            {loading && <div className="badge" style={{marginTop:8}}>Parsing… {progress}%</div>}
-            {loading && <div className="progress" style={{marginTop:8}}><div style={{width: progress + '%'}}/></div>}
-            {errorMsg && <div className="badge" style={{marginTop:8, background:"rgba(244,63,94,.15)", borderColor:"rgba(244,63,94,.35)"}}>{errorMsg}</div>}
-          </div>
-
-          <div className="card glass">
-            <h3><Filter size={16}/> Filtri</h3>
-            <div className="controls">
-              <div style={{position:'relative'}}>
-                <Search size={16} style={{position:'absolute', left:10, top:10, opacity:.8}}/>
-                <input className="input" style={{paddingLeft:34}} placeholder="Cerca account / categoria / asset" value={query} onChange={(e)=>setQuery(e.target.value)} />
-              </div>
-              <select className="select" value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}>
-                <option value="All">All</option>
-                {categories.map(v=> <option key={v} value={v}>{v}</option>)}
-              </select>
-              <select className="select" value={assetFilter} onChange={(e)=>setAssetFilter(e.target.value)}>
-                {['All','Cash','Equity','Bond','Fund','Crypto','Real Estate','Other'].map(v=> <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-          </div>
+    <div key="categories" className="categories-page">
+      <GlassCard className="categories-overview">
+        <h3>Categories Overview</h3>
+        <div className="categories-grid">
+          {categories.map(category => {
+            const categoryData = seriesByCategory.find(s => s.name === category)
+            if (!categoryData) return null
+            
+            const latestValue = categoryData.data[categoryData.data.length - 1]?.value || 0
+            const previousValue = categoryData.data[categoryData.data.length - 2]?.value || 0
+            const change = latestValue - previousValue
+            const changePct = previousValue ? (change / previousValue) * 100 : 0
+            
+            return (
+              <GlassCard key={category} className="category-card">
+                <h4>{category}</h4>
+                <div className="category-value">{numberFormat(latestValue)}</div>
+                <div className={`category-change ${change >= 0 ? 'positive' : 'negative'}`}>
+                  {change >= 0 ? '+' : ''}{numberFormat(change)} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%)
+                </div>
+                <ResponsiveContainer width="100%" height={100}>
+                  <LineChart data={categoryData.data}>
+                    <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={1} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </GlassCard>
+            )
+          })}
         </div>
+      </GlassCard>
+    </div>,
 
-        <div className="tabs" style={{marginTop:8}}>
-          {(['Summary','Net Worth','Allocation','Accounts','Categories'] as const).map(s => (
-            <button key={s} className={'tab ' + (section===s? 'active':'')} onClick={()=>setSection(s)}>{s}</button>
+    <div key="net-worth" className="net-worth-page">
+      <GlassCard className="net-worth-chart">
+        <h3>Net Worth Timeline</h3>
+        <ResponsiveContainer width="100%" height={400}>
+          <LineChart data={byMonth}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip formatter={(value) => numberFormat(value as number)} />
+            <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={3} />
+          </LineChart>
+        </ResponsiveContainer>
+      </GlassCard>
+    </div>,
+
+    <div key="allocation" className="allocation-page">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GlassCard className="allocation-chart">
+          <h3>Asset Allocation</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={allocationByAsset}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {allocationByAsset.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={`hsl(${index * 60}, 70%, 50%)`} /> 
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => numberFormat(value as number)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </GlassCard>
+
+        <GlassCard className="allocation-chart">
+          <h3>Category Allocation</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={allocationByCategory}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip formatter={(value) => numberFormat(value as number)} />
+              <Bar dataKey="value" fill="#8884d8" />
+            </BarChart>
+          </ResponsiveContainer>
+        </GlassCard>
+      </div>
+    </div>,
+
+    <div key="accounts" className="accounts-page">
+      <GlassCard className="accounts-overview">
+        <h3>Accounts Overview</h3>
+        <div className="accounts-list">
+          {latestByAccount.map(account => (
+            <div key={account.Account} className="account-item">
+              <div className="account-name">{account.Account}</div>
+              <div className="account-value">{numberFormat(account.Value)}</div>
+            </div>
           ))}
         </div>
+      </GlassCard>
+    </div>
+  ]
 
-        <div style={{marginTop:12}}>
-          {section === 'Summary' && (<Pager pages={SummaryPages} index={pageIdx} setIndex={setPageIdx} />)}
-          {section === 'Net Worth' && (<Pager pages={NetWorthPages} index={pageIdx} setIndex={setPageIdx} />)}
-          {section === 'Allocation' && (<Pager pages={AllocationPages} index={pageIdx} setIndex={setPageIdx} />)}
-          {section === 'Accounts' && (<Pager pages={[
-            (<div key="ac1" className="card glass">
-              <h3>Ultima fotografia per account</h3>
-              <div style={{overflowX:'auto'}}>
-                <table><thead><tr><th>Account</th><th>Valore</th></tr></thead><tbody>
-                  {latestByAccount.map((r,i)=> (<tr key={i}><td>{r.Account}</td><td style={{fontWeight:600}}>{numberFormat(r.Value as number)}</td></tr>))}
-                </tbody></table>
+  return (
+    <div className="app">
+      {/* Version Banner */}
+      <div className="version-banner">
+        Version: v2.52 @ 947f4f4
+      </div>
+
+      {/* Top Header with Ticker */}
+      <div className="top-header">
+        <WallStreetTicker />
+      </div>
+
+      {/* Main Dashboard */}
+      <div className="dashboard-layout">
+        {/* Left Column - Header & Summary */}
+        <div className="left-column">
+          <GlassCard className="header-card">
+            <h1>💰 Wealth Dashboard</h1>
+            <p>Track your financial portfolio with real-time insights</p>
+          </GlassCard>
+
+          {/* Filters Section */}
+          <FiltersBar
+            query={query}
+            setQuery={setQuery}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            accountFilter={accountFilter}
+            setAccountFilter={setAccountFilter}
+            categories={categories}
+            accounts={accounts}
+            onResetData={clearAllData}
+          />
+
+          {/* Upload Section */}
+          <GlassCard className="upload-section">
+            <h3><UploadIcon size={16} /> Upload Excel File</h3>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) onFile(file)
+              }}
+              className="file-input"
+            />
+            {loading && (
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+                </div>
+                <div className="progress-text">{progress}%</div>
               </div>
-            </div>),
-            (<div key="ac2" className="card glass" style={{height:320}}>
-              <h3>Valore per account (barre)</h3>
-              <div style={{height:250}}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={latestByAccount} margin={{ left: 36, right: 12, top: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                    <XAxis dataKey="Account" stroke="#cbd5e1" interval={0} angle={-20} height={60} />
-                    <YAxis width={90} tick={{fontSize:12}} stroke="#cbd5e1" tickFormatter={(v)=> new Intl.NumberFormat('it-IT').format(v)} />
-                    <Tooltip formatter={(v:any)=>numberFormat(Number(v))} />
-                    <Bar dataKey="Value" fill="#60a5fa" radius={[8,8,0,0] as any} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>),
-          ]} index={pageIdx} setIndex={setPageIdx} />)}
-          {section === 'Categories' && (<Pager pages={CategoryPages} index={pageIdx} setIndex={setPageIdx} />)}
+            )}
+            {errorMsg && <div className="error-message">{errorMsg}</div>}
+          </GlassCard>
         </div>
 
-        {!data.length && (
-          <div className="card glass" style={{marginTop:24}}>
-            Nessun dato ancora. Carica un file sopra.
+        {/* Right Column - Content */}
+        <div className="right-column">
+          {/* Navigation Tabs */}
+          <div className="navigation-tabs">
+            <button
+              className={`tab ${section === 'Summary' ? 'active' : ''}`}
+              onClick={() => setSection('Summary')}
+            >
+              <LayoutGrid size={16} /> Summary
+            </button>
+            <button
+              className={`tab ${section === 'Categories' ? 'active' : ''}`}
+              onClick={() => setSection('Categories')}
+            >
+              <PieIcon size={16} /> Categories
+            </button>
+            <button
+              className={`tab ${section === 'Net Worth' ? 'active' : ''}`}
+              onClick={() => setSection('Net Worth')}
+            >
+              <LineIcon size={16} /> Net Worth
+            </button>
+            <button
+              className={`tab ${section === 'Allocation' ? 'active' : ''}`}
+              onClick={() => setSection('Allocation')}
+            >
+              <PieIcon size={16} /> Allocation
+            </button>
+            <button
+              className={`tab ${section === 'Accounts' ? 'active' : ''}`}
+              onClick={() => setSection('Accounts')}
+            >
+              <BookOpen size={16} /> Accounts
+            </button>
           </div>
-        )}
+
+          {/* Main Content */}
+          <div className="main-content">
+            {section === 'Summary' && pages[0]}
+            {section === 'Categories' && pages[1]}
+            {section === 'Net Worth' && pages[2]}
+            {section === 'Allocation' && pages[3]}
+            {section === 'Accounts' && pages[4]}
+          </div>
+
+          {/* News Hub Section */}
+          <div className="news-section">
+            <NewsHub />
+          </div>
+        </div>
       </div>
     </div>
   )

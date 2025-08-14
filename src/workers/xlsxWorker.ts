@@ -1,97 +1,125 @@
-import * as XLSX from "xlsx";
+import * as XLSX from 'xlsx';
 
-export type ParsedRow = {
-  Date: string;
-  Account: string;
-  Category?: string;
-  AssetClass?: string;
-  Currency?: string;
-  Value: number;
-};
-
-const MONTHS: Record<string, number> = {
-  "gennaio":1,"febbraio":2,"marzo":3,"aprile":4,"maggio":5,"giugno":6,
-  "luglio":7,"agosto":8,"settembre":9,"ottobre":10,"novembre":11,"dicembre":12
-};
-
-function normMonth(m:any):number|null{
-  if(m==null) return null;
-  const s=String(m).trim().toLowerCase().replace(/\s+/g,"").normalize("NFD").replace(/\p{Diacritic}/gu,"");
-  return MONTHS[s as keyof typeof MONTHS] || null;
-}
-function parseItNumber(v:any):number|null{
-  if(v==null) return null;
-  let s=String(v).trim(); if(!s||s==="−"||s==="-") return null;
-  s=s.replace(/\./g,"").replace(/\s/g,"").replace(",",".");
-  const n=Number(s); return isNaN(n)?null:n;
+interface WorkerMessage {
+  type: 'parse' | 'cancel';
+  data?: any;
+  id?: string;
 }
 
-type Msg =
- | {type:"progress"; value:number}
- | {type:"result"; ok:true; rows:ParsedRow[]}
- | {type:"result"; ok:false; error:string};
+interface ParseResult {
+  type: 'progress' | 'complete' | 'error';
+  progress?: number;
+  data?: any;
+  error?: string;
+}
 
-self.onmessage = async (e: MessageEvent<{buffer:ArrayBuffer; name:string}>)=>{
-  try{
-    const {buffer,name}=e.data;
-    (self as any).postMessage({type:"progress", value:1} as Msg);
+let currentJob: { id: string; cancelled: boolean } | null = null;
 
-    const isCSV=/\.csv$/i.test(name);
-    const wb = isCSV
-      ? XLSX.read(new TextDecoder().decode(new Uint8Array(buffer)), {type:"string"})
-      : XLSX.read(new Uint8Array(buffer), {type:"array"});
+self.onmessage = function(e: MessageEvent<WorkerMessage>) {
+  const { type, data, id } = e.data;
 
-    const sheet=wb.Sheets[wb.SheetNames[0]];
-    if(!sheet){ (self as any).postMessage({type:"result", ok:false, error:"Nessun foglio trovato"} as Msg); return; }
-
-    const raw:any[] = XLSX.utils.sheet_to_json<any>(sheet, {defval:""});
-    if(!raw.length){ (self as any).postMessage({type:"result", ok:false, error:"Il file è vuoto"} as Msg); return; }
-
-    const headerKeys=Object.keys(raw[0]??{});
-    const annoKey=headerKeys.find(k=>/^anno$/i.test(String(k).trim()));
-    const meseKey=headerKeys.find(k=>/^mese$/i.test(String(k).trim()));
-    if(!annoKey||!meseKey){ (self as any).postMessage({type:"result", ok:false, error:"Servono colonne 'Anno' e 'Mese'"} as Msg); return; }
-    const categoryCols=headerKeys.filter(k=>k!==annoKey && k!==meseKey);
-
-    const total=raw.length; const out:ParsedRow[]=[];
-    // PIÙ EVENTI: più step e chunk più piccoli
-    const steps=Math.min(150, Math.max(40, Math.ceil(total/40)));
-    const chunkSize=Math.max(5, Math.ceil(total/steps));
-    let processed=0, lastPct=1, rowTicker=0;
-
-    for(let start=0; start<total; start+=chunkSize){
-      const end=Math.min(total, start+chunkSize);
-      for(let i=start;i<end;i++){
-        const r=raw[i];
-        const year=Number(String(r[annoKey]).trim());
-        const mnum=normMonth(r[meseKey]);
-        if(year && mnum){
-          const iso=String(year).padStart(4,"0")+"-"+String(mnum).padStart(2,"0")+"-01";
-          for(const col of categoryCols){
-            const cellStr=String(r[col]??'').trim();
-            if(cellStr==='') break; // stop alla prima cella vuota
-            const val=parseItNumber(r[col]); if(val==null) continue;
-            const catName=String(col).trim()||"Categoria";
-            out.push({Date:iso, Account:catName, Category:catName, AssetClass:"Other", Currency:"EUR", Value:val});
-          }
-        }
-        processed++; rowTicker++;
-
-        // Aggiorna progress ogni ~200 righe per file grandi
-        if(rowTicker>=200){
-          rowTicker=0;
-          const pct=Math.max(1, Math.min(98, Math.round((processed/total)*98)));
-          if(pct>lastPct){ (self as any).postMessage({type:"progress", value:pct} as Msg); lastPct=pct; }
-          await new Promise(r=>setTimeout(r,0));
-        }
-      }
-      const pct=Math.max(1, Math.min(98, Math.round((processed/total)*98)));
-      if(pct>lastPct){ (self as any).postMessage({type:"progress", value:pct} as Msg); lastPct=pct; }
-      await new Promise(r=>setTimeout(r,0));
+  if (type === 'parse') {
+    if (currentJob) {
+      currentJob.cancelled = true;
     }
-    (self as any).postMessage({type:"progress", value:100} as Msg);
-    (self as any).postMessage({type:"result", ok:true, rows:out} as Msg);
-  }catch(err:any){
-    (self as any).postMessage({type:"result", ok:false, error: err?.message||"Errore di parsing"} as Msg);
+    
+    currentJob = { id: id || 'default', cancelled: false };
+    parseExcelFile(data, currentJob);
+  } else if (type === 'cancel') {
+    if (currentJob) {
+      currentJob.cancelled = true;
+    }
   }
 };
+
+function parseExcelFile(fileData: ArrayBuffer, job: { id: string; cancelled: boolean }) {
+  try {
+    const workbook = XLSX.read(fileData, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    if (!worksheet) {
+      self.postMessage({
+        type: 'error',
+        error: 'No worksheet found'
+      } as ParseResult);
+      return;
+    }
+
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    const totalRows = range.e.r - range.s.r + 1;
+    
+    if (totalRows === 0) {
+      self.postMessage({
+        type: 'complete',
+        data: []
+      } as ParseResult);
+      return;
+    }
+
+    // Chunked parsing with progress updates
+    const chunkSize = Math.max(1, Math.floor(totalRows / 20)); // 20 progress updates
+    const rows: any[] = [];
+    
+    for (let row = range.s.r; row <= range.e.r; row++) {
+      if (job.cancelled) {
+        return;
+      }
+
+      const rowData: any = {};
+      let hasData = false;
+
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = worksheet[cellAddress];
+        
+        if (cell && cell.v !== undefined && cell.v !== null && cell.v !== '') {
+          hasData = true;
+          const colName = XLSX.utils.encode_col(col);
+          rowData[colName] = cell.v;
+        }
+      }
+
+      if (hasData) {
+        rows.push(rowData);
+      }
+
+      // Progress update every chunk
+      if (row % chunkSize === 0 || row === range.e.r) {
+        const progress = Math.min(99, Math.floor((row - range.s.r + 1) / totalRows * 99));
+        self.postMessage({
+          type: 'progress',
+          progress
+        } as ParseResult);
+      }
+    }
+
+    if (job.cancelled) {
+      return;
+    }
+
+    // Final progress update
+    self.postMessage({
+      type: 'progress',
+      progress: 99
+    } as ParseResult);
+
+    // Small delay to show 99% progress
+    setTimeout(() => {
+      if (!job.cancelled) {
+        self.postMessage({
+          type: 'complete',
+          data: rows
+        } as ParseResult);
+      }
+    }, 100);
+
+  } catch (error) {
+    if (!job.cancelled) {
+      self.postMessage({
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      } as ParseResult);
+    }
+  }
+}

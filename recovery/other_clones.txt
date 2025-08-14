@@ -1,0 +1,2 @@
+>>> ../wealth-dashboard-react
+2025-08-11 17:58:36 +0200 947f4f4 Setup versioning system v1.1

@@ -1,1 +1,10 @@
-{ "major": 1, "minor": 1 }
+{
+  "commit": "947f4f4e9949a3e66195766fa0bec69098b8ca30",
+  "shortCommit": "947f4f4",
+  "branch": "feature/recreate-v2.52",
+  "tag": null,
+  "timestamp": "2025-08-14T14:05:39.408Z",
+  "version": "2.52",
+  "buildTime": "2025-08-14T14:05:39.408Z",
+  "environment": "development"
+}

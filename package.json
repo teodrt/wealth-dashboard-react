@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "bash ./scripts/preflight.sh",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "clean": "rm -rf .next node_modules/.vite dist",
+    "reinstall": "rm -rf node_modules && npm i",
     "version:sync": "node scripts/sync-version.cjs",
     "release:minor": "node scripts/bump.cjs minor && npm run version:sync && npm run build && node scripts/commit-push.cjs",
     "release:major": "node scripts/bump.cjs major && npm run version:sync && npm run build && node scripts/commit-push.cjs"

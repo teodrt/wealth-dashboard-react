@@ -1,0 +1,44 @@
+=== refs/heads/main ===
+947f4f4 refs/heads/main@{2025-08-11 17:58:36 +0200}: commit: Setup versioning system v1.1
+4df4d06 refs/heads/main@{2025-08-11 17:50:32 +0200}: commit: Smoother progress (more worker ticks, cap 99) + stop nudger on result
+689cb20 refs/heads/main@{2025-08-11 17:45:07 +0200}: commit: Revert XLSX import to standard + chunked progress + nudger + glass import
+b554a81 refs/heads/main@{2025-08-11 17:26:33 +0200}: commit: Force styles import + version stamp [2025.08.11-1726]
+d3b0502 refs/heads/main@{2025-08-11 17:17:20 +0200}: commit: Chunked parsing + glass categories (Build 2025.08.11-1717)
+b57937a refs/heads/main@{2025-08-11 15:25:22 +0200}: commit: UX: smooth progress + input reset; new Categories section with glass design; chart margin fixes
+a895bc6 refs/heads/main@{2025-08-11 15:10:12 +0200}: commit: Worker progress + stop at empty cell; App onFile reset + chart margins
+f00f9fe refs/heads/main@{2025-08-11 14:46:34 +0200}: commit: Charts: prevent clipped Y-axis labels (margins + YAxis width)
+9d2db87 refs/heads/main@{2025-08-11 14:06:51 +0200}: commit: Parser: stop on first empty category cell per row; multi-category columns
+ebc479f refs/heads/main@{2025-08-11 13:57:56 +0200}: commit: Fix JSX: replace HTML comment with JSX comment
+d8310cb refs/heads/main@{2025-08-11 13:56:19 +0200}: commit: UI: dynamic category filter from uploaded columns
+6f9fb60 refs/heads/main@{2025-08-11 13:30:27 +0200}: commit: Parser 3 colonne (Anno, Mese, categorie es. N26) con mesi IT e numeri con punti
+8f13550 refs/heads/main@{2025-08-11 13:01:15 +0200}: commit: Fix: add missing AccountsPages
+7cdb5c2 refs/heads/main@{2025-08-11 12:50:24 +0200}: commit: Fix: remove duplicate declarations (allocation vars)
+75ee1f7 refs/heads/main@{2025-08-11 12:42:09 +0200}: commit: Add Input tab wired to charts
+f7ba3db refs/heads/main@{2025-08-11 12:12:08 +0200}: commit: Aggiunta pagina Input manuale
+f9714ac refs/heads/main@{2025-08-11 11:51:33 +0200}: commit: v2.1: UI glass, worker parsing, progress bar, pager
+9d5962b refs/heads/main@{2025-08-11 11:41:10 +0200}: commit: Nuova versione con design aggiornato e fix upload Excel
+881f321 refs/heads/main@{2025-08-11 11:38:55 +0200}: commit: Versione completa cool UI
+6d08cbc refs/heads/main@{2025-08-11 08:28:15 +0200}: commit: Pulizia repo e caricamento nuova versione
+34b2e7b refs/heads/main@{2025-08-11 08:28:11 +0200}: clone: from https://github.com/teodrt/wealth-dashboard-react.git
+=== refs/remotes/origin/HEAD ===
+34b2e7b refs/remotes/origin/HEAD@{2025-08-11 08:28:11 +0200}: clone: from https://github.com/teodrt/wealth-dashboard-react.git
+=== refs/remotes/origin/main ===
+947f4f4 refs/remotes/origin/main@{2025-08-11 17:58:38 +0200}: update by push
+4df4d06 refs/remotes/origin/main@{2025-08-11 17:50:34 +0200}: update by push
+689cb20 refs/remotes/origin/main@{2025-08-11 17:45:09 +0200}: update by push
+b554a81 refs/remotes/origin/main@{2025-08-11 17:26:35 +0200}: update by push
+d3b0502 refs/remotes/origin/main@{2025-08-11 17:17:24 +0200}: update by push
+b57937a refs/remotes/origin/main@{2025-08-11 15:25:24 +0200}: update by push
+a895bc6 refs/remotes/origin/main@{2025-08-11 15:10:15 +0200}: update by push
+f00f9fe refs/remotes/origin/main@{2025-08-11 14:46:36 +0200}: update by push
+9d2db87 refs/remotes/origin/main@{2025-08-11 14:06:52 +0200}: update by push
+ebc479f refs/remotes/origin/main@{2025-08-11 13:57:58 +0200}: update by push
+d8310cb refs/remotes/origin/main@{2025-08-11 13:56:21 +0200}: update by push
+6f9fb60 refs/remotes/origin/main@{2025-08-11 13:30:28 +0200}: update by push
+8f13550 refs/remotes/origin/main@{2025-08-11 13:01:17 +0200}: update by push
+7cdb5c2 refs/remotes/origin/main@{2025-08-11 12:50:26 +0200}: update by push
+75ee1f7 refs/remotes/origin/main@{2025-08-11 12:42:11 +0200}: update by push
+f7ba3db refs/remotes/origin/main@{2025-08-11 12:12:10 +0200}: update by push
+f9714ac refs/remotes/origin/main@{2025-08-11 11:51:54 +0200}: update by push
+9d5962b refs/remotes/origin/main@{2025-08-11 11:41:14 +0200}: update by push
+881f321 refs/remotes/origin/main@{2025-08-11 11:39:16 +0200}: update by push

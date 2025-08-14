@@ -613,8 +613,8 @@ export default function App(){
                       dataKey="value" 
                       stroke="#3b82f6" 
                       strokeWidth={4}
-                      dot={{ fill: '#3b82f6', strokeWidth: 3, r: 6 }}
-                      activeDot={{ r: 8, stroke: '#3b82f6', strokeWidth: 3 }}
+                      dot={false}
+                      activeDot={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>

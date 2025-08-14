@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, CartesianGrid } from 'recharts';
 import { Upload as UploadIcon, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive, BookOpen, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -57,10 +57,7 @@ function numberFormatCompact(n: number | undefined | null) {
 
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
 
-function getCategoryColor(index: number): string {
-  const colors = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4'];
-  return colors[index % colors.length];
-}
+//
 
 function useKeyNav(onLeft: ()=>void, onRight: ()=>void){ 
   useEffect(()=>{ 
@@ -147,8 +144,7 @@ export default function App(){
   useAutoRefresh(loading, handleProgressTick, 60);
 
 
-  // Additional series per-category (optional, keep empty for now)
-  const seriesByCategory: { name: string; data: { month: string; value: number }[] }[] = []
+  //
 
   const onFile = useCallback(async (file: File) => {
     try {
@@ -325,40 +321,7 @@ export default function App(){
       <CategoriesCard />
     </div>,
 
-    <div key="net-worth" className="net-worth-page">
-              <GlassCard className="net-worth-chart">
-          <h3>Net Worth Timeline</h3>
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-              <XAxis 
-                dataKey="month" 
-                stroke="rgba(255, 255, 255, 0.7)"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="rgba(255, 255, 255, 0.7)"
-                fontSize={12}
-                tickFormatter={(value) => numberFormatCompact(value)}
-                width={80}
-                tick={{ fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip 
-                formatter={(value) => numberFormat(value as number)}
-                contentStyle={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  color: 'white'
-                }}
-              />
-              <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={3} />
-            </LineChart>
-          </ResponsiveContainer>
-        </GlassCard>
-    </div>,
+    
 
     <div key="allocation" className="allocation-page">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -509,10 +472,24 @@ export default function App(){
             {/* Portfolio Diversity Card */}
             <div className="asset-card">
               <div className="asset-label">Portfolio Diversity</div>
-              <div className="asset-value">{allocationByCategory.length}</div>
+              <div className="asset-value">{
+                // Unique subcategories under current category
+                (() => {
+                  const cat = category as any;
+                  if (!cat) return 0;
+                  const subsSet = new Set<string>();
+                  positions.forEach(r => {
+                    if ((r as any).category === cat) {
+                      const s = (r as any).account?.trim();
+                      if (s) subsSet.add(s);
+                    }
+                  });
+                  return subsSet.size;
+                })()
+              }</div>
               <div className="asset-change positive">
                 <span>↑</span>
-                <span>Categories</span>
+                <span>{category ? 'Unique subs' : 'Select a category'}</span>
               </div>
             </div>
           </div>
@@ -557,59 +534,6 @@ export default function App(){
 
         {/* Additional Charts Row */}
         <div className="dashboard-grid">
-          {/* Net Worth Timeline */}
-          <div className="portfolio-card">
-            <div className="portfolio-header">
-              <h3 className="portfolio-title">Net Worth Timeline</h3>
-            </div>
-            <div className="chart-container">
-              {seriesByCategory.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                    <XAxis 
-                      dataKey="month" 
-                      stroke="rgba(255, 255, 255, 0.7)"
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke="rgba(255, 255, 255, 0.7)"
-                      fontSize={12}
-                      tickFormatter={(value) => numberFormatCompact(value)}
-                      width={80}
-                      tick={{ fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-              />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(0,0,0,0.8)', 
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: '8px',
-                        color: 'white'
-                      }}
-                      formatter={(value: any) => [numberFormat(value), 'Value']}
-                    />
-                    {seriesByCategory.map((series, index) => (
-                      <Area
-                        key={series.name}
-                        type="monotone"
-                        dataKey="value"
-                        data={series.data}
-                        stackId="1"
-                        stroke={getCategoryColor(index)}
-                        fill={getCategoryColor(index)}
-                        fillOpacity={0.6}
-                      />
-                    ))}
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="empty-state">No data available</div>
-              )}
-            </div>
-          </div>
-
           {/* News Hub */}
           <div className="portfolio-card">
             <div className="portfolio-header">

@@ -5,6 +5,7 @@ import { useFiltersStore } from '../store/filters';
 import { CATEGORIES } from '../config/categories';
 import { useDataStore } from '../store/dataStore';
 import { selectAvailableSubs } from '../selectors/portfolio';
+import AutocompleteSearch, { Suggestion } from './AutocompleteSearch';
 
 interface FiltersBarProps {
 	query?: string;
@@ -70,12 +71,25 @@ export default function FiltersBar({
 				<div className="md:col-span-3 col-span-12">
 					<div className="search-container">
 						<Search size={16} className="search-icon" />
-						<input
-							type="text"
-							placeholder="Search..."
+						<AutocompleteSearch
 							value={query ?? ''}
-							onChange={(e) => setQuery?.(e.target.value)}
-							className="search-input"
+							onChange={(v) => setQuery?.(v)}
+							onPick={(s: Suggestion) => {
+								if (s.kind === 'category') {
+									if (setCategoryFilter) setCategoryFilter(s.id); else setCategory(s.id);
+									if (setAccountFilter) setAccountFilter('All'); else setSub(undefined);
+									setQuery?.(CATEGORIES.find(c => c.id === s.id)?.label || '');
+								} else {
+									if (s.masters.length === 1) {
+										const m = s.masters[0];
+										if (setCategoryFilter) setCategoryFilter(m); else setCategory(m);
+									}
+									if (setAccountFilter) setAccountFilter(s.label); else setSub(s.label);
+									setQuery?.(s.label);
+								}
+							}}
+							placeholder="Search categories or subs..."
+							className="w-full"
 						/>
 					</div>
 				</div>

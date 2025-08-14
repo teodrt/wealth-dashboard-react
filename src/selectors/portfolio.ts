@@ -1,6 +1,6 @@
-import { CategoryId } from '../config/categories';
-import type { ParsedRow } from '../lib/parseExcel';
+import { CategoryId, CATEGORY_IDS } from '../config/categories';
 import type { PortfolioPosition } from '../types/state';
+import type { ParsedRow } from '../lib/parseExcel';
 import type { DateRange } from '../store/filters';
 
 export type InputRow = ParsedRow | PortfolioPosition;
@@ -130,4 +130,92 @@ export function selectAvailableSubs(raw: InputRow[], category?: CategoryId): str
 		if (r.sub) subs.add(r.sub);
 	}
 	return Array.from(subs).sort();
+}
+
+// ===== Latest month helpers for category totals (ParsedRow-based) =====
+export type YearMonth = { year: number; month: number };
+
+export function getLatestYearMonth(rows: ParsedRow[]): YearMonth | undefined {
+	let best: YearMonth | undefined;
+	for (const r of rows) {
+		const y = Number(r.year);
+		const m = typeof r.month === 'number' ? r.month : parseInt(String(r.month), 10);
+		if (!y || !m || m < 1 || m > 12) continue;
+		if (!best) best = { year: y, month: m };
+		else if (y > best.year || (y === best.year && m > best.month)) best = { year: y, month: m };
+	}
+	return best;
+}
+
+export function filterRowsByYearMonth(rows: ParsedRow[], ym: YearMonth): ParsedRow[] {
+	return rows.filter(r => {
+		const y = Number(r.year);
+		const m = typeof r.month === 'number' ? r.month : parseInt(String(r.month), 10);
+		return y === ym.year && m === ym.month;
+	});
+}
+
+export function aggregateTotalsByMonth(rows: ParsedRow[], ym: YearMonth): Record<CategoryId, number> {
+	const totals = Object.fromEntries(CATEGORY_IDS.map(id => [id, 0])) as Record<CategoryId, number>;
+	const monthRows = filterRowsByYearMonth(rows, ym);
+	for (const r of monthRows) {
+		const cat = (r.master as CategoryId) || ('alternatives' as CategoryId);
+		const val = Number(r.amount || 0);
+		if (Number.isFinite(val)) totals[cat] = (totals[cat] || 0) + val;
+	}
+	return totals;
+}
+
+export function sumNetWorth(totals: Record<CategoryId, number>): number {
+	return CATEGORY_IDS.reduce((sum, id) => sum + (Number(totals[id as CategoryId]) || 0), 0);
+}
+
+// ===== Search helpers (categories + subs) =====
+export function normalize(input: string): string {
+  if (!input) return '';
+  return input
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function buildSubIndex(rows: ParsedRow[]): Map<string, Set<CategoryId>> {
+  const index = new Map<string, Set<CategoryId>>();
+  for (const r of rows) {
+    const label = (r.sub || '').toString().trim();
+    if (!label) continue;
+    const norm = normalize(label);
+    if (!norm) continue;
+    if (!index.has(label)) index.set(label, new Set<CategoryId>());
+    index.get(label)!.add(r.master as CategoryId);
+  }
+  return index;
+}
+
+// Unique subs for a given category (ParsedRow[] version - pure)
+export function uniqueSubsForCategory(rows: ParsedRow[], category?: CategoryId): string[] {
+  if (!Array.isArray(rows) || rows.length === 0 || !category) return [];
+  const set = new Set<string>();
+  for (const r of rows) {
+    if (r && (r.master as CategoryId) === category) {
+      const s = (r.sub ?? '').toString().trim();
+      if (s) set.add(s);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+// Convenience for current app data shape (PortfolioPosition[])
+export function uniqueSubsForCategoryInput(rows: InputRow[], category?: CategoryId): string[] {
+  if (!category) return [];
+  const filtered = selectFilteredRows(rows as any[], { category, sub: undefined, dateRange: undefined });
+  const set = new Set<string>();
+  for (const r of filtered) {
+    const s = (r.sub ?? '').toString().trim();
+    if (s) set.add(s);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
 }

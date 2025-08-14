@@ -52,7 +52,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
   background-size: 400% 400%;
-  animation: premiumGradient 15s ease infinite;
+  animation: premiumGradient 45s ease-in-out infinite;
   color: var(--color-gray-900);
   min-height: 100vh;
   overflow-x: hidden;
@@ -63,8 +63,14 @@ body {
   0% {
     background-position: 0% 50%;
   }
-  50% {
+  25% {
     background-position: 100% 50%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 0% 100%;
   }
   100% {
     background-position: 0% 50%;

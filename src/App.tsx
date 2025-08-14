@@ -86,6 +86,22 @@ export default function App(){
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
   const [accountFilter, setAccountFilter] = useState<string>('All')
+  
+  // Reset account filter when category changes and current account is not available
+  useEffect(() => {
+    if (categoryFilter !== 'All' && accountFilter !== 'All') {
+      const availableAccounts = new Set<string>()
+      normalized.forEach(r => {
+        if (r.Category === categoryFilter) {
+          availableAccounts.add(r.Account || 'Unknown')
+        }
+      })
+      
+      if (!availableAccounts.has(accountFilter)) {
+        setAccountFilter('All')
+      }
+    }
+  }, [categoryFilter, accountFilter, normalized])
   const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'|'Categories'>('Summary')
   const [pageIdx, setPageIdx] = useState(0)
   
@@ -182,7 +198,22 @@ export default function App(){
   }, [normalized]);
 
   const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
-  const accounts = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort(), [normalized])
+  
+  // Dynamic accounts based on selected category
+  const accounts = useMemo(()=> {
+    if (categoryFilter === 'All') {
+      return Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort()
+    } else {
+      // Filter accounts that have data in the selected category
+      const categoryAccounts = new Set<string>()
+      normalized.forEach(r => {
+        if (r.Category === categoryFilter) {
+          categoryAccounts.add(r.Account || 'Unknown')
+        }
+      })
+      return Array.from(categoryAccounts).sort()
+    }
+  }, [normalized, categoryFilter])
 
   const filtered = useMemo(()=> normalized.filter(r => {
     const q=query.toLowerCase();

@@ -1,32 +1,66 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { formatCurrencyEU, formatDelta, formatInitials } from '../lib/format';
-import GlassCard from './ui/GlassCard';
 import { APP_VERSION } from '../constants/version';
 import { useDataStore } from '../store/dataStore';
 
 interface HeaderProps {
   userName?: string;
   userHandle?: string;
-  dailyChange?: number;
-  dailyChangePercent?: number;
-  trboChangePercent?: number;
-  blzChangePercent?: number;
+  filteredData?: any[];
+  categoryFilter?: string;
+  accountFilter?: string;
 }
 
 export default function Header({
   userName = 'Teo D\'Ortenzio',
   userHandle = '@teodortenzio',
-  dailyChange = 7885,
-  dailyChangePercent = 1.2,
-  trboChangePercent = 424,
-  blzChangePercent = 0
+  filteredData = [],
+  categoryFilter = 'All',
+  accountFilter = 'All'
 }: HeaderProps) {
   const initials = formatInitials(userName);
-  const delta = formatDelta(dailyChange);
   
-  const { netWorth } = useDataStore();
-  const trboValue = netWorth;
-  const blzValue = 0; // Placeholder for now
+  const { netWorth, raw } = useDataStore();
+  
+  // Calculate last month's total and change with filters applied
+  const lastMonthData = useMemo(() => {
+    // Always use raw data for the main balance display
+    if (!raw || raw.length === 0) return { total: 0, change: 0, changePercent: 0 };
+    
+    // Get unique years and months
+    const years = [...new Set(raw.map(r => r.year))].sort();
+    const months = [...new Set(raw.map(r => r.month))].sort();
+    
+    if (years.length === 0 || months.length === 0) return { total: 0, change: 0, changePercent: 0 };
+    
+    const lastYear = years[years.length - 1];
+    const lastMonth = months[months.length - 1];
+    
+    // Get last month total
+    const lastMonthTotal = raw
+      .filter(r => r.year === lastYear && r.month === lastMonth)
+      .reduce((sum, r) => sum + r.amount, 0);
+    
+    // Get previous month total
+    let previousMonthTotal = 0;
+    if (months.length > 1) {
+      const previousMonth = months[months.length - 2];
+      previousMonthTotal = raw
+        .filter(r => r.year === lastYear && r.month === previousMonth)
+        .reduce((sum, r) => sum + r.amount, 0);
+    }
+    
+    const change = lastMonthTotal - previousMonthTotal;
+    const changePercent = previousMonthTotal > 0 ? (change / previousMonthTotal) * 100 : 0;
+    
+    return {
+      total: lastMonthTotal,
+      change,
+      changePercent
+    };
+  }, [raw]);
+  
+  const delta = formatDelta(lastMonthData.change);
   
   return (
     <div className="header-section">
@@ -41,43 +75,30 @@ export default function Header({
         </div>
       </div>
 
-      {/* Center: Main Balance */}
-      <div className="main-balance">
-        <h1 className="wealth-title">WEALTH</h1>
-        <p className="welcome-text">Hi Teo, welcome back to your portfolio</p>
+      {/* Center: App Title & Balance */}
+      <div className="app-title">
+        <div className="app-name">WEALTH DASHBOARD</div>
+        <div className="pro-badge">PRO</div>
+        <div className="welcome-text">Hi Teo, welcome back to your portfolio</div>
+        
+        {/* Main Balance */}
         <div className="balance-display">
-          <div className="balance-amount">{formatCurrencyEU(netWorth)}</div>
+          <div className="balance-amount">{formatCurrencyEU(lastMonthData.total)}</div>
           <div className="balance-change" style={{ color: delta.color }}>
-            ↑ {delta.formatted} (+{dailyChangePercent}%)
+            {delta.isPositive ? '↑' : '↓'} {delta.formatted} ({delta.isPositive ? '+' : ''}{lastMonthData.changePercent.toFixed(1)}%)
           </div>
         </div>
       </div>
 
-      {/* Right: Stat Chips */}
-      <div className="stat-chips">
-        <GlassCard variant="chip" className="stat-chip">
-          <div className="stat-label">TRBO</div>
-          <div className="stat-value">{formatCurrencyEU(trboValue)}</div>
-          <div className="stat-change" style={{ color: 'var(--color-success-green)' }}>
-            +{trboChangePercent}%
-          </div>
-        </GlassCard>
-        
-        <GlassCard variant="chip" className="stat-chip">
-          <div className="stat-label">BLZ</div>
-          <div className="stat-value">{formatCurrencyEU(blzValue)}</div>
-          <div className="stat-change" style={{ color: 'var(--color-success-green)' }}>
-            +{blzChangePercent}%
-          </div>
-        </GlassCard>
-      </div>
+
 
       {/* Version Badge */}
       <div className="version-badge">
-        <GlassCard variant="chip" className="version-chip">
+        <div className="version-chip">
           WD v{APP_VERSION}
-        </GlassCard>
+        </div>
       </div>
     </div>
   );
 }
+

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid, AreaChart, Area } from 'recharts';
 import { Upload as UploadIcon, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive, BookOpen, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -29,10 +29,30 @@ function parseDate(input: any): string {
 
 function numberFormat(n: number | undefined | null) { 
   if (n == null || isNaN(n as any)) return '–'; 
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n as number) 
+  return new Intl.NumberFormat('it-IT', { 
+    style: 'currency', 
+    currency: 'EUR', 
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0
+  }).format(n as number) 
+}
+
+function numberFormatCompact(n: number | undefined | null) {
+  if (n == null || isNaN(n as any)) return '–';
+  if (n >= 1000000) {
+    return `${(n / 1000000).toFixed(1)}M €`;
+  } else if (n >= 1000) {
+    return `${(n / 1000).toFixed(0)}k €`;
+  }
+  return `${n.toFixed(0)} €`;
 }
 
 function monthKey(dateISO: string) { return dateISO ? dateISO.slice(0,7) : '' }
+
+function getCategoryColor(index: number): string {
+  const colors = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4'];
+  return colors[index % colors.length];
+}
 
 function useKeyNav(onLeft: ()=>void, onRight: ()=>void){ 
   useEffect(()=>{ 
@@ -89,14 +109,14 @@ export default function App(){
           // Convert legacy format to new format
           const converted = p.map((row: any) => ({
             date: row.Date || row.date || '',
-            account: row.Account || row.account || 'Unknown',
-            category: row.Category || row.category || 'Other',
-            asset: row.AssetClass || row.asset || 'Other',
-            currency: row.Currency || row.currency || 'EUR',
-            amount: Number(row.Value || row.amount || 0),
-            note: row.note || ''
-          }));
-          useDataStore.getState().setRaw(converted);
+                      // Convert legacy data to new matrix format
+          year: new Date(row.Date || row.date || new Date()).getFullYear(),
+          month: new Date(row.Date || row.date || new Date()).getMonth() + 1,
+          master: row.Category || row.category || 'alternatives',
+          sub: row.Account || row.account || 'Unknown',
+          amount: Number(row.Value || row.amount || 0)
+        }));
+        useDataStore.getState().setRaw(converted);
         }
       }catch(e){
         console.error('Failed to load legacy data:', e);
@@ -121,13 +141,45 @@ export default function App(){
   const data = useMemo(()=> rows || [], [rows])
   const normalized = useMemo(()=> data.map(r => ({
     ...r,
-    Date: parseDate(r.date),
-    Account: r.account?.trim() || 'Manual',
-    Category: r.category || 'Other',
-    AssetClass: r.asset || 'Other',
-    Currency: r.currency || 'EUR',
+    Date: new Date(r.year, typeof r.month === 'number' ? r.month - 1 : 0, 1).toISOString(),
+    Account: r.sub?.trim() || 'Manual',
+    Category: r.master || 'Other',
+    AssetClass: r.sub || 'Other',
+    Currency: 'EUR',
     Value: typeof r.amount === 'string' ? Number(r.amount) : r.amount,
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
+
+  // Calculate last month data for header display
+  const lastMonthData = useMemo(() => {
+    if (!normalized || normalized.length === 0) return { total: 0, change: 0, changePercent: 0 };
+    
+    // Get unique months
+    const months = [...new Set(normalized.map(r => r.Date))].sort();
+    
+    if (months.length === 0) return { total: 0, change: 0, changePercent: 0 };
+    
+    const lastMonth = months[months.length - 1];
+    const previousMonth = months.length > 1 ? months[months.length - 2] : lastMonth;
+    
+    // Get last month total
+    const lastMonthTotal = normalized
+      .filter(r => r.Date === lastMonth)
+      .reduce((sum, r) => sum + (r.Value as number), 0);
+    
+    // Get previous month total
+    const previousMonthTotal = normalized
+      .filter(r => r.Date === previousMonth)
+      .reduce((sum, r) => sum + (r.Value as number), 0);
+    
+    const change = lastMonthTotal - previousMonthTotal;
+    const changePercent = previousMonthTotal > 0 ? (change / previousMonthTotal) * 100 : 0;
+    
+    return {
+      total: lastMonthTotal,
+      change,
+      changePercent
+    };
+  }, [normalized]);
 
   const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
   const accounts = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort(), [normalized])
@@ -327,7 +379,11 @@ export default function App(){
                 <YAxis 
                   stroke="rgba(255, 255, 255, 0.7)"
                   fontSize={12}
-                  tickFormatter={(value) => numberFormat(value)}
+                  tickFormatter={(value) => numberFormatCompact(value)}
+                  width={80}
+                  tick={{ fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <Tooltip 
                   formatter={(value) => numberFormat(value as number)}
@@ -384,18 +440,38 @@ export default function App(){
     </div>,
 
     <div key="net-worth" className="net-worth-page">
-      <GlassCard className="net-worth-chart">
-        <h3>Net Worth Timeline</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={byMonth}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
-            <Tooltip formatter={(value) => numberFormat(value as number)} />
-            <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={3} />
-          </LineChart>
-        </ResponsiveContainer>
-      </GlassCard>
+              <GlassCard className="net-worth-chart">
+          <h3>Net Worth Timeline</h3>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={byMonth}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+              <XAxis 
+                dataKey="month" 
+                stroke="rgba(255, 255, 255, 0.7)"
+                fontSize={12}
+              />
+              <YAxis 
+                stroke="rgba(255, 255, 255, 0.7)"
+                fontSize={12}
+                tickFormatter={(value) => numberFormatCompact(value)}
+                width={80}
+                tick={{ fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip 
+                formatter={(value) => numberFormat(value as number)}
+                contentStyle={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '8px',
+                  color: 'white'
+                }}
+              />
+              <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={3} />
+            </LineChart>
+          </ResponsiveContainer>
+        </GlassCard>
     </div>,
 
     <div key="allocation" className="allocation-page">
@@ -455,23 +531,110 @@ export default function App(){
 
   return (
     <div className="app">
-      {/* Version Banner */}
-      <div className="version-banner">
-        Version: v2.52 @ 947f4f4
-      </div>
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Header Section */}
+        <Header 
+          filteredData={filtered}
+          categoryFilter={categoryFilter}
+          accountFilter={accountFilter}
+        />
 
-      {/* Top Header with Ticker */}
-      <div className="top-header">
-        <WallStreetTicker />
-      </div>
+        {/* Dashboard Grid */}
+        <div className="dashboard-grid">
+          {/* Left: Portfolio Performance */}
+          <div className="portfolio-card">
+            <div className="portfolio-header">
+              <h3 className="portfolio-title">Portfolio Performance</h3>
+            </div>
+            
+            <div className="chart-container">
+              {byMonth.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={byMonth}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis 
+                      dataKey="month" 
+                      stroke="rgba(255, 255, 255, 0.7)"
+                      fontSize={12}
+                    />
+                    <YAxis 
+                      stroke="rgba(255, 255, 255, 0.7)"
+                      fontSize={12}
+                      tickFormatter={(value) => numberFormatCompact(value)}
+                      width={80}
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(0,0,0,0.8)', 
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                      formatter={(value: any) => [numberFormat(value), 'Value']}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#3b82f6" 
+                      strokeWidth={4}
+                      dot={{ fill: '#3b82f6', strokeWidth: 3, r: 6 }}
+                      activeDot={{ r: 8, stroke: '#3b82f6', strokeWidth: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="empty-state">
+                  <div className="empty-icon">📊</div>
+                  <p>No data available</p>
+                  <small>Upload an Excel file to see your portfolio performance</small>
+                </div>
+              )}
+            </div>
+          </div>
 
-      {/* Main Dashboard */}
-      <div className="dashboard-layout">
-        {/* Left Column - Header & Summary */}
-        <div className="left-column">
-          <Header />
+          {/* Right: Asset Details Sidebar */}
+          <div className="asset-sidebar">
+            {/* Total Wealth Card */}
+            <div className="asset-card">
+              <div className="asset-label">Total Wealth</div>
+              <div className="asset-value">€{numberFormatCompact(netWorth)}</div>
+              <div className="asset-change positive">
+                <span>↑</span>
+                <span>Active</span>
+              </div>
+            </div>
 
-          {/* Filters Section */}
+            {/* Monthly Change Card */}
+            <div className="asset-card">
+              <div className="asset-label">Monthly Change</div>
+              <div className="asset-value">€{numberFormatCompact(lastMonthData.change)}</div>
+              <div className="asset-change positive">
+                <span>↑</span>
+                <span>{lastMonthData.changePercent.toFixed(1)}%</span>
+              </div>
+            </div>
+
+            {/* Portfolio Diversity Card */}
+            <div className="asset-card">
+              <div className="asset-label">Portfolio Diversity</div>
+              <div className="asset-value">{categories.length}</div>
+              <div className="asset-change positive">
+                <span>↑</span>
+                <span>Categories</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters Section */}
+        <div className="filters-section">
+          <div className="filters-header">
+            <h3 className="filters-title">Filters & Search</h3>
+          </div>
           <FiltersBar
             query={query}
             setQuery={setQuery}
@@ -483,60 +646,87 @@ export default function App(){
             accounts={accounts}
             onResetData={clearAllData}
           />
-
-          {/* Upload Section */}
-                  <Uploader
-          onDataParsed={(parsedRows) => {
-            // Legacy callback - data is now handled by the store
-            console.log('Legacy callback received', parsedRows.length, 'rows');
-          }}
-          onError={(errorMsg) => {
-            console.error('Upload error:', errorMsg);
-          }}
-        />
         </div>
 
-        {/* Right Column - Content */}
-        <div className="right-column">
-          {/* Navigation Tabs */}
-          <div className="navigation-tabs">
-            <button
-              className={`tab ${section === 'Summary' ? 'active' : ''}`}
-              onClick={() => setSection('Summary')}
-            >
-              Overview
-            </button>
-            <button
-              className={`tab ${section === 'Categories' ? 'active' : ''}`}
-              onClick={() => setSection('Categories')}
-            >
-              Categories
-            </button>
-            <button
-              className={`tab ${section === 'Net Worth' ? 'active' : ''}`}
-              onClick={() => setSection('Net Worth')}
-            >
-              Insights
-            </button>
-            <button
-              className={`tab ${section === 'Allocation' ? 'active' : ''}`}
-              onClick={() => setSection('Allocation')}
-            >
-              Uploads
-            </button>
+        {/* Upload Section */}
+        <div className="upload-section">
+          <Uploader
+            onDataParsed={(parsedRows) => {
+              // Legacy callback - data is now handled by the store
+              console.log('Legacy callback received', parsedRows.length, 'rows');
+            }}
+            onError={(errorMsg) => {
+              console.error('Upload error:', errorMsg);
+            }}
+          />
+        </div>
+
+        {/* Categories Section */}
+        <div className="categories-section">
+          <h3 className="categories-title">Portfolio Categories</h3>
+          <CategoriesCard />
+        </div>
+
+        {/* Additional Charts Row */}
+        <div className="dashboard-grid">
+          {/* Net Worth Timeline */}
+          <div className="portfolio-card">
+            <div className="portfolio-header">
+              <h3 className="portfolio-title">Net Worth Timeline</h3>
+            </div>
+            <div className="chart-container">
+              {seriesByCategory.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={byMonth}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis 
+                      dataKey="month" 
+                      stroke="rgba(255, 255, 255, 0.7)"
+                      fontSize={12}
+                    />
+                    <YAxis 
+                      stroke="rgba(255, 255, 255, 0.7)"
+                      fontSize={12}
+                      tickFormatter={(value) => numberFormatCompact(value)}
+                      width={80}
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+              />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(0,0,0,0.8)', 
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                      formatter={(value: any) => [numberFormat(value), 'Value']}
+                    />
+                    {seriesByCategory.map((series, index) => (
+                      <Area
+                        key={series.name}
+                        type="monotone"
+                        dataKey="value"
+                        data={series.data}
+                        stackId="1"
+                        stroke={getCategoryColor(index)}
+                        fill={getCategoryColor(index)}
+                        fillOpacity={0.6}
+                      />
+                    ))}
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="empty-state">No data available</div>
+              )}
+            </div>
           </div>
 
-          {/* Main Content */}
-          <div className="main-content">
-            {section === 'Summary' && pages[0]}
-            {section === 'Categories' && pages[1]}
-            {section === 'Net Worth' && pages[2]}
-            {section === 'Allocation' && pages[3]}
-            {section === 'Accounts' && pages[4]}
-          </div>
-
-          {/* News Hub Section */}
-          <div className="news-section">
+          {/* News Hub */}
+          <div className="portfolio-card">
+            <div className="portfolio-header">
+              <h3 className="portfolio-title">Market News</h3>
+            </div>
             <NewsHub />
           </div>
         </div>

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload as UploadIcon, X, AlertCircle } from 'lucide-react';
 import GlassCard from './GlassCard';
@@ -12,171 +14,120 @@ interface UploaderProps {
 }
 
 export default function Uploader({ onDataParsed, onError }: UploaderProps) {
-  const [isUploading, setIsUploading] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [errorDetails, setErrorDetails] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState('');
-  const [lastWorkerMessage, setLastWorkerMessage] = useState<any>(null);
+  const [lastUploadTime, setLastUploadTime] = useState<string | null>(null);
   
-  const workerRef = useRef<Worker | null>(null);
-  const timeoutRef = useRef<number | null>(null);
-  const isUploadingRef = useRef(false);
-  const commitTimeoutRef = useRef<number | null>(null);
-  
+  const fileRef = useRef<File | null>(null);
   const { setRaw } = useDataStore();
+  
+  // Monotonic progress that never goes backwards
+  const bump = useCallback((p: number) => {
+    setProgress(prev => Math.max(prev, Math.min(99, p)));
+  }, []);
 
   const maxFileSizeMB = 25; // Default max file size
   const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
 
   const resetState = useCallback(() => {
-    setIsUploading(false);
+    setIsBusy(false);
     setProgress(0);
-    setErrorMessage('');
-    setErrorDetails('');
+    setErrorMessage(null);
     setUploadStatus('');
-    setLastWorkerMessage(null);
-    isUploadingRef.current = false;
-    
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    
-    if (commitTimeoutRef.current) {
-      clearTimeout(commitTimeoutRef.current);
-      commitTimeoutRef.current = null;
-    }
+    setLastUploadTime(null);
+    fileRef.current = null;
   }, []);
 
-  const showError = useCallback((message: string, details?: string) => {
-    error('Upload error', { message, details });
+  const showError = useCallback((message: string) => {
+    error('Upload error', { message });
     setErrorMessage(message);
-    setErrorDetails(details || '');
-    resetState();
     onError?.(message);
-  }, [resetState, onError]);
+  }, [onError]);
 
-  const finalize = useCallback(async (input: File | any[]) => {
-    console.info('[upload] finalize called', { input: input instanceof File ? input.name : 'parsed-rows' });
-    
+  // Robust upload handler with phase-based progress
+  const onFileSelected = useCallback(async (file: File) => {
     try {
-      let parsedRows;
-      
-      if (input instanceof File) {
-        // Parse file using new parser
-        parsedRows = await parseFile(input);
-        console.info('[upload] parsed', { rows: parsedRows.length });
-      } else {
-        // Use pre-parsed rows (fallback case)
-        parsedRows = input;
-        console.info('[upload] using pre-parsed rows', { rows: parsedRows.length });
-      }
-      
-      if (parsedRows.length === 0) {
-        showError('No valid data found', 'All rows were empty or missing required fields');
+      // Prevent double-processing
+      if (fileRef.current?.name === file.name && isBusy) {
         return;
       }
       
-      // Commit to store (this will also calculate totals and net worth)
-      setRaw(parsedRows);
-      console.info('[upload] committed', { rows: parsedRows.length });
+      setErrorMessage(null);
+      setIsBusy(true);
+      setProgress(0);
+      fileRef.current = file;
       
-      // Check if any items were assigned to alternatives
-      const alternativesCount = parsedRows.filter(row => row.category === 'alternatives').length;
-      if (alternativesCount > 0) {
-        setUploadStatus(`Imported ${parsedRows.length} rows (${alternativesCount} assigned to Alternatives)`);
-      } else {
-        setUploadStatus(`Imported ${parsedRows.length} rows`);
+      // Phase 1: Read file (0-25%)
+      bump(10);
+      setUploadStatus('Reading file...');
+      const arrayBuffer = await file.arrayBuffer();
+      bump(25);
+      
+      // Phase 2: Parse with progress (25-75%)
+      setUploadStatus('Parsing file...');
+      const parsedRows = await parseFile(file, {
+        onProgress: (ratio: number) => {
+          const progressValue = 25 + Math.floor(50 * Math.max(0, Math.min(1, ratio)));
+          bump(progressValue);
+        }
+      });
+      console.info('[upload] parsed', { rows: parsedRows.length });
+      
+      if (parsedRows.length === 0) {
+        throw new Error('No valid data found - all rows were empty or missing required fields');
       }
       
-      setIsUploading(false);
-      isUploadingRef.current = false;
+      bump(75);
+      
+      // Phase 3: Commit to store (75-90%)
+      setUploadStatus('Processing data...');
+      setRaw(parsedRows);
+      console.info('[upload] committed', { rows: parsedRows.length });
+      bump(90);
+      
+      // Phase 4: Finalize and wait for next paint (90-99%)
+      setUploadStatus('Finalizing...');
+      await Promise.resolve(); // Wait for React to commit state
+      bump(99);
+      
+      // Phase 5: Success (100%)
+      const alternativesCount = parsedRows.filter(row => row.master === 'alternatives').length;
+      const uniqueYears = [...new Set(parsedRows.map(row => row.year))].sort();
+      const uniqueSubs = [...new Set(parsedRows.map(row => row.sub))].sort();
+      
+      if (alternativesCount > 0) {
+        setUploadStatus(`Imported ${parsedRows.length} data points (${alternativesCount} mapped to Alternatives) - Years: ${uniqueYears.join(', ')} - Subs: ${uniqueSubs.slice(0, 3).join(', ')}${uniqueSubs.length > 3 ? '...' : ''}`);
+      } else {
+        setUploadStatus(`Imported ${parsedRows.length} data points - Years: ${uniqueYears.join(', ')} - Subs: ${uniqueSubs.slice(0, 3).join(', ')}${uniqueSubs.length > 3 ? '...' : ''}`);
+      }
+      
+      setProgress(100);
+      setLastUploadTime(new Date().toLocaleTimeString());
       
       // Call legacy callback for compatibility
       onDataParsed(parsedRows);
       
-      // Clear commit timeout
-      if (commitTimeoutRef.current) {
-        clearTimeout(commitTimeoutRef.current);
-        commitTimeoutRef.current = null;
-      }
-      
-    } catch (err: any) {
-      console.error('[upload] finalize error', err);
-      showError('Data processing failed', err.message);
-    }
-  }, [setRaw, showError, onDataParsed]);
-
-  const parseWithFallback = useCallback(async (buffer: ArrayBuffer) => {
-    info('Starting fallback parsing');
-    setUploadStatus('Parsing with fallback...');
-    
-    try {
-      // Lazy import XLSX
-      const XLSX = (await import('xlsx')).default || (await import('xlsx'));
-      
-      // Parse in chunks to keep UI responsive
-      const uint8Array = new Uint8Array(buffer);
-      const workbook = XLSX.read(uint8Array, { type: 'array' });
-      
-      if (!workbook.SheetNames.length) {
-        throw new Error('No sheets found in workbook');
-      }
-      
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      if (!worksheet) {
-        throw new Error(`Sheet "${sheetName}" not found`);
-      }
-      
-      setProgress(20);
-      await new Promise(r => requestAnimationFrame(r));
-      
-      // Convert to JSON with progress updates
-      const rows = XLSX.utils.sheet_to_json(worksheet, { 
-        defval: '',
-        header: 1,
-        raw: false
-      });
-      
-      setProgress(60);
-      await new Promise(r => requestAnimationFrame(r));
-      
-      // Process rows in chunks
-      const processedRows = [];
-      const chunkSize = 100;
-      
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
-        processedRows.push(...chunk);
-        
-        if (i % (chunkSize * 5) === 0) {
-          setProgress(60 + Math.floor((i / rows.length) * 30));
-          await new Promise(r => requestAnimationFrame(r));
+      // Keep progress at 100% for 800ms then fade
+      setTimeout(() => {
+        if (progress === 100) {
+          setProgress(0);
+          setUploadStatus('');
         }
-      }
-      
-      setProgress(100);
-      setUploadStatus('Parsing complete');
-      
-      info('Fallback parsing completed', { rows: processedRows.length });
-      finalize(processedRows);
+      }, 800);
       
     } catch (err: any) {
-      error('Fallback parsing failed', err);
-      showError('Fallback parsing failed', err?.message || String(err));
+      console.error('UPLOAD/PARSE ERROR', err);
+      setErrorMessage(err?.message || 'Failed to parse file');
+      // Do NOT reset progress to 0 - leave bar where it got to
+    } finally {
+      setIsBusy(false);
     }
-  }, [showError, finalize]);
+  }, [bump, setRaw, onDataParsed, progress]);
 
   const handleFileUpload = useCallback(async (file: File) => {
-    if (isUploadingRef.current) {
+    if (isBusy) {
       warn('Upload already in progress');
       return;
     }
@@ -192,97 +143,65 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
     
     if (!allowedTypes.includes(fileExtension)) {
-      showError('Invalid file type', `Allowed types: ${allowedTypes.join(', ')}`);
+      showError(`Invalid file type. Allowed types: ${allowedTypes.join(', ')}`);
       return;
     }
 
     // Validate file size
     if (file.size > maxFileSizeBytes) {
       showError(
-        'File too large', 
-        `File size (${(file.size / 1024 / 1024).toFixed(1)}MB) exceeds limit (${maxFileSizeMB}MB)`
+        `File too large. File size (${(file.size / 1024 / 1024).toFixed(1)}MB) exceeds limit (${maxFileSizeMB}MB)`
       );
       return;
     }
 
-    setIsUploading(true);
-    isUploadingRef.current = true;
-    setProgress(0);
-    setErrorMessage('');
-    setErrorDetails('');
-    setUploadStatus('Reading file...');
-
-    try {
-      // Read file as ArrayBuffer
-      const buffer = await file.arrayBuffer();
-      setProgress(5);
-      setUploadStatus('Starting parser...');
-
-      // Start timeout for fallback
-      timeoutRef.current = setTimeout(() => {
-        warn('Worker timeout, switching to fallback');
-        if (workerRef.current) {
-          workerRef.current.terminate();
-          workerRef.current = null;
-        }
-        parseWithFallback(buffer);
-      }, 5000);
-
-      // Use new parser
-      finalize(file);
-
-    } catch (err: any) {
-      error('File reading failed', err);
-      showError('Failed to read file', err?.message || String(err));
-    }
-  }, [maxFileSizeBytes, showError, parseWithFallback, onDataParsed]);
+    // Start upload process
+    await onFileSelected(file);
+  }, [isBusy, maxFileSizeBytes, showError, onFileSelected]);
 
   const handleCancel = useCallback(() => {
     info('Upload cancelled by user');
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
     resetState();
   }, [resetState]);
 
   return (
     <div className="uploader-container">
-      <GlassCard className="upload-section">
-        <h3>
-          <UploadIcon size={16} /> Upload Excel File
-        </h3>
+              <div className="upload-section">
+          <h3 className="upload-title">
+            <UploadIcon size={16} /> Upload Excel File
+          </h3>
         
         <div className="upload-controls">
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileUpload(file);
-              // Reset input
-              e.target.value = '';
-            }}
-            className="file-input"
-            disabled={isUploading}
-          />
+          <label className="file-input-wrapper">
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file);
+                // Reset input
+                e.target.value = '';
+              }}
+              className="file-input"
+              disabled={isBusy}
+            />
+            <span className="file-input-text">
+              {isBusy ? 'Processing...' : 'Choose Excel/CSV file'}
+            </span>
+          </label>
           
-          {isUploading && (
+          {isBusy && (
             <button 
               className="cancel-button"
               onClick={handleCancel}
-              disabled={!isUploading}
+              disabled={!isBusy}
             >
               <X size={16} /> Cancel
             </button>
           )}
         </div>
 
-        {isUploading && (
+        {isBusy && (
           <div className="progress-container">
             <div className="progress-bar">
               <div 
@@ -296,29 +215,38 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
           </div>
         )}
 
+        {lastUploadTime && !isBusy && (
+          <div className="upload-success">
+            <small>Last upload: {lastUploadTime}</small>
+          </div>
+        )}
+
         <div className="upload-info">
           <small>
             Supported formats: .xlsx, .xls, .csv | Max size: {maxFileSizeMB}MB
           </small>
         </div>
-      </GlassCard>
+      </div>
 
-      <ErrorBanner
-        message={errorMessage}
-        details={errorDetails}
-        onDismiss={() => {
-          setErrorMessage('');
-          setErrorDetails('');
-        }}
-      />
+      {errorMessage && (
+        <ErrorBanner
+          message={errorMessage}
+          details=""
+          onDismiss={() => setErrorMessage(null)}
+        />
+      )}
       
       {/* Debug Panel */}
       {true && (
         <div className="debug-panel">
           <h4>Debug Info</h4>
           <div className="debug-section">
-            <strong>Last Worker Message:</strong>
-            <pre>{JSON.stringify(lastWorkerMessage, null, 2)}</pre>
+            <strong>Current Progress:</strong>
+            <span>{progress}%</span>
+          </div>
+          <div className="debug-section">
+            <strong>Status:</strong>
+            <span>{uploadStatus}</span>
           </div>
           <div className="debug-section">
             <strong>Store Count:</strong>

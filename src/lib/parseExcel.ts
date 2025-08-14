@@ -11,13 +11,11 @@ export type RawRow = {
 };
 
 export type ParsedRow = { 
-  category: CategoryId; 
-  amount: number; 
-  asset?: string; 
-  date?: Date; 
-  currency?: string; 
-  account?: string; 
-  notes?: string 
+  year: number;
+  month: string | number;
+  master: CategoryId;
+  sub: string;
+  amount: number;
 };
 
 export const STRICT_MODE = false;
@@ -62,15 +60,19 @@ export function mapCategory(input: string): CategoryId {
 }
 
 // Parse amount with EU/US format support
-function parseAmount(value: any): number {
-  if (typeof value === 'number') return value;
-  if (!value) return 0;
+function parseAmount(value: any): number | null {
+  if (typeof value === 'number') return isNaN(value) ? null : value;
+  if (!value) return null;
   
   const str = String(value).trim();
-  if (!str) return 0;
+  if (!str) return null;
   
   // Remove currency symbols and spaces
   let cleaned = str.replace(/[€$£¥\s]/g, '');
+  
+  // Handle parentheses for negative numbers
+  const isNegative = cleaned.includes('(') && cleaned.includes(')');
+  cleaned = cleaned.replace(/[()]/g, '');
   
   // Handle EU format (1.234,56) vs US format (1,234.56)
   const hasComma = cleaned.includes(',');
@@ -90,71 +92,86 @@ function parseAmount(value: any): number {
   }
   
   const parsed = Number(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
+  if (isNaN(parsed)) return null;
+  
+  return isNegative ? -parsed : parsed;
 }
 
-// Parse date with multiple format support
-function parseDate(value: any): Date | undefined {
-  if (!value) return undefined;
+// Parse month (convert to number if possible)
+function parseMonth(value: any): string | number {
+  if (typeof value === 'number') {
+    if (value >= 1 && value <= 12) return value;
+    return String(value);
+  }
   
   const str = String(value).trim();
-  if (!str) return undefined;
+  if (!str) return '';
   
-  // Try to parse various formats
-  const date = new Date(str);
-  if (!isNaN(date.getTime())) {
-    return date;
+  // Try to parse month names
+  const monthMap: Record<string, number> = {
+    'jan': 1, 'january': 1, 'gen': 1, 'gennaio': 1,
+    'feb': 2, 'february': 2, 'febbraio': 2,
+    'mar': 3, 'march': 3, 'marzo': 3,
+    'apr': 4, 'april': 4, 'aprile': 4,
+    'may': 5, 'maggio': 5,
+    'jun': 6, 'june': 6, 'giu': 6, 'giugno': 6,
+    'jul': 7, 'july': 7, 'lug': 7, 'luglio': 7,
+    'aug': 8, 'august': 8, 'ago': 8, 'agosto': 8,
+    'sep': 9, 'september': 9, 'set': 9, 'settembre': 9,
+    'oct': 10, 'october': 10, 'ott': 10, 'ottobre': 10,
+    'nov': 11, 'november': 11, 'novembre': 11,
+    'dec': 12, 'december': 12, 'dic': 12, 'dicembre': 12
+  };
+  
+  const normalized = str.toLowerCase();
+  if (monthMap[normalized]) {
+    return monthMap[normalized];
   }
   
-  // Handle dd/MM/yyyy and MM/dd/yyyy
-  const parts = str.split(/[\/\-\.]/);
-  if (parts.length === 3) {
-    const [a, b, c] = parts;
-    // Try both formats
-    const date1 = new Date(`${c}-${a}-${b}`);
-    const date2 = new Date(`${c}-${b}-${a}`);
-    
-    if (!isNaN(date1.getTime())) {
-      return date1;
-    }
-    if (!isNaN(date2.getTime())) {
-      return date2;
-    }
-  }
-  
-  return undefined;
+  return str;
 }
 
-// Parse Excel/CSV file
-export async function parseFile(file: File): Promise<ParsedRow[]> {
+// Parse Excel/CSV file in matrix format
+export async function parseFile(
+  file: File, 
+  options: { onProgress?: (ratio: number) => void } = {}
+): Promise<ParsedRow[]> {
+  const { onProgress } = options;
   const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
   
   if (fileExtension === '.csv') {
-    return parseCSV(file);
+    return parseCSV(file, { onProgress });
   } else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-    return parseXLSX(file);
+    return parseXLSX(file, { onProgress });
   } else {
     throw new Error(`Unsupported file type: ${fileExtension}`);
   }
 }
 
-// Parse CSV file
-async function parseCSV(file: File): Promise<ParsedRow[]> {
+// Parse CSV file in matrix format
+async function parseCSV(
+  file: File, 
+  options: { onProgress?: (ratio: number) => void } = {}
+): Promise<ParsedRow[]> {
+  const { onProgress } = options;
   const text = await file.text();
   const lines = text.split('\n').filter(line => line.trim());
   
-  if (lines.length < 2) {
-    throw new Error('CSV must have at least a header row and one data row');
+  if (lines.length < 3) {
+    throw new Error('CSV must have at least 3 rows (headers + data)');
   }
   
-  const headers = lines[0].split(',').map(h => h.trim());
-  const dataRows = lines.slice(1).map(line => line.split(','));
+  const dataRows = lines.map(line => line.split(',').map(cell => cell.trim()));
   
-  return parseRows(dataRows, headers);
+  return parseMatrix(dataRows, { onProgress });
 }
 
-// Parse XLSX file
-async function parseXLSX(file: File): Promise<ParsedRow[]> {
+// Parse XLSX file in matrix format
+async function parseXLSX(
+  file: File, 
+  options: { onProgress?: (ratio: number) => void } = {}
+): Promise<ParsedRow[]> {
+  const { onProgress } = options;
   const XLSX = (await import('xlsx')).default || (await import('xlsx'));
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
@@ -172,103 +189,140 @@ async function parseXLSX(file: File): Promise<ParsedRow[]> {
   
   const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
   
-  if (jsonData.length < 2) {
-    throw new Error('Excel must have at least a header row and one data row');
+  if (jsonData.length < 3) {
+    throw new Error('Excel must have at least 3 rows (headers + data)');
   }
   
-  const headers = (jsonData[0] as string[]).map(h => String(h || '').trim());
-  const dataRows = jsonData.slice(1) as any[][];
-  
-  return parseRows(dataRows, headers);
+  return parseMatrix(jsonData as any[][], { onProgress });
 }
 
-// Parse data rows with headers
-function parseRows(dataRows: any[][], headers: string[]): ParsedRow[] {
-  const categoryIndex = headers.findIndex(h => 
-    normalize(h).includes('category') || normalize(h).includes('categoria')
-  );
-  const amountIndex = headers.findIndex(h => 
-    normalize(h).includes('amount') || normalize(h).includes('importo') || 
-    normalize(h).includes('value') || normalize(h).includes('valore')
-  );
-  const assetIndex = headers.findIndex(h => 
-    normalize(h).includes('asset') || normalize(h).includes('titolo') ||
-    normalize(h).includes('strumento')
-  );
-  const dateIndex = headers.findIndex(h => 
-    normalize(h).includes('date') || normalize(h).includes('data')
-  );
-  const currencyIndex = headers.findIndex(h => 
-    normalize(h).includes('currency') || normalize(h).includes('valuta')
-  );
-  const accountIndex = headers.findIndex(h => 
-    normalize(h).includes('account') || normalize(h).includes('conto')
-  );
-  const notesIndex = headers.findIndex(h => 
-    normalize(h).includes('notes') || normalize(h).includes('note') ||
-    normalize(h).includes('description') || normalize(h).includes('descrizione')
-  );
+// Parse matrix data with the specific layout
+function parseMatrix(
+  dataRows: any[][], 
+  options: { onProgress?: (ratio: number) => void } = {}
+): ParsedRow[] {
+  const { onProgress } = options;
   
-  if (categoryIndex === -1) {
-    throw new Error('Required column "Category" not found');
-  }
-  if (amountIndex === -1) {
-    throw new Error('Required column "Amount" not found');
+  // Validate minimum structure
+  if (dataRows.length < 3) {
+    throw new Error('Matrix must have at least 3 rows');
   }
   
-  const parsed: ParsedRow[] = [];
-  const unknownCategories: string[] = [];
+  // Row 1: Master categories (C1, D1, E1, ...)
+  const masterRow = dataRows[0] || [];
+  // Row 2: Sub-categories (C2, D2, E2, ...)
+  const subRow = dataRows[1] || [];
+  // Row 3+: Data rows (A3, B3, C3, ...)
+  const dataRowsFrom3 = dataRows.slice(2);
   
-  for (let i = 0; i < dataRows.length; i++) {
-    const row = dataRows[i];
-    if (!row || row.every(cell => !cell)) continue; // Skip empty rows
+  // Validate year/month columns exist
+  if (!masterRow[0] || !masterRow[1]) {
+    throw new Error('Missing Year (A3...) and/or Month (B3...) rows.');
+  }
+  
+  // Find the first data column (should be C, index 2)
+  let firstDataCol = 2;
+  while (firstDataCol < masterRow.length && !masterRow[firstDataCol]) {
+    firstDataCol++;
+  }
+  
+  if (firstDataCol >= masterRow.length) {
+    throw new Error('No category columns found starting from column C');
+  }
+  
+  // Extract master categories and validate
+  const masters: CategoryId[] = [];
+  const subs: string[] = [];
+  const warnings: string[] = [];
+  const invalidHeaders: string[] = [];
+  
+  for (let col = firstDataCol; col < masterRow.length; col++) {
+    const masterHeader = masterRow[col];
+    const subHeader = subRow[col];
+    
+    if (!masterHeader) continue; // Skip empty columns
     
     try {
-      const category = mapCategory(row[categoryIndex] || '');
-      const amount = parseAmount(row[amountIndex]);
+      const masterCategory = mapCategory(masterHeader);
+      masters.push(masterCategory);
+      subs.push(subHeader || 'Unknown');
       
-      if (amount === 0) continue; // Skip rows with zero amount
-      
-      parsed.push({
-        category,
-        amount,
-        asset: row[assetIndex] ? String(row[assetIndex]).trim() : undefined,
-        date: row[dateIndex] ? parseDate(row[dateIndex]) : undefined,
-        currency: row[currencyIndex] ? String(row[currencyIndex]).trim() : 'EUR',
-        account: row[accountIndex] ? String(row[accountIndex]).trim() : 'Unknown',
-        notes: row[notesIndex] ? String(row[notesIndex]).trim() : undefined
-      });
-      
-      // Track unknown categories for reporting
-      if (category === 'alternatives' && row[categoryIndex]) {
-        const input = String(row[categoryIndex]).trim();
-        if (!unknownCategories.includes(input)) {
-          unknownCategories.push(input);
-        }
+      if (masterCategory === 'alternatives' && STRICT_MODE === false) {
+        warnings.push(`Column ${String.fromCharCode(65 + col)}: "${masterHeader}" mapped to ALTERNATIVES`);
       }
     } catch (error) {
       if (STRICT_MODE) {
-        throw error;
+        throw new Error(`Invalid master category in column ${String.fromCharCode(65 + col)}: "${masterHeader}"`);
+      } else {
+        masters.push('alternatives');
+        subs.push(subHeader || 'Unknown');
+        invalidHeaders.push(masterHeader);
+        warnings.push(`Column ${String.fromCharCode(65 + col)}: "${masterHeader}" mapped to ALTERNATIVES`);
       }
-      // In non-strict mode, skip problematic rows
-      console.warn(`Skipping row ${i + 1}:`, error);
     }
   }
   
-  // Log unknown categories for review
-  if (unknownCategories.length > 0) {
-    console.info('Categories mapped to alternatives:', unknownCategories);
+  if (masters.length === 0) {
+    throw new Error('No valid master categories found');
+  }
+  
+  // Parse data rows
+  const parsed: ParsedRow[] = [];
+  const totalCells = dataRowsFrom3.length * masters.length;
+  let processedCells = 0;
+  
+  for (let rowIndex = 0; rowIndex < dataRowsFrom3.length; rowIndex++) {
+    const row = dataRowsFrom3[rowIndex];
+    if (!row || row.length < 2) continue; // Skip rows without year/month
+    
+    const year = parseInt(String(row[0] || ''), 10);
+    const month = parseMonth(row[1]);
+    
+    if (isNaN(year) || !month) continue; // Skip invalid year/month
+    
+    for (let colIndex = 0; colIndex < masters.length; colIndex++) {
+      const dataCol = firstDataCol + colIndex;
+      const amount = parseAmount(row[dataCol]);
+      
+      if (amount !== null) {
+        parsed.push({
+          year,
+          month,
+          master: masters[colIndex],
+          sub: subs[colIndex],
+          amount
+        });
+      } else if (row[dataCol] !== undefined && row[dataCol] !== '') {
+        warnings.push(`Invalid amount at ${String.fromCharCode(65 + dataCol)}${rowIndex + 3}: "${row[dataCol]}"`);
+      }
+      
+      processedCells++;
+      
+      // Report progress every 100 cells or at the end
+      if (onProgress && (processedCells % 100 === 0 || processedCells === totalCells)) {
+        onProgress(processedCells / totalCells);
+      }
+    }
+  }
+  
+  // Log warnings
+  if (warnings.length > 0) {
+    console.warn('Parsing warnings:', warnings);
+  }
+  
+  if (invalidHeaders.length > 0) {
+    console.warn('Invalid headers mapped to alternatives:', invalidHeaders);
   }
   
   return parsed;
 }
 
-// Aggregate totals by category
+// Aggregate totals by master category
 export function aggregateTotals(rows: ParsedRow[]): Record<CategoryId, number> {
   const totals = Object.fromEntries(CATEGORY_IDS.map(id => [id as CategoryId, 0])) as Record<CategoryId, number>;
   
   for (const row of rows) {
-    totals[row.category] += row.amount || 0;
+    totals[row.master] += row.amount || 0;
   }
   
   return totals;
@@ -277,4 +331,22 @@ export function aggregateTotals(rows: ParsedRow[]): Record<CategoryId, number> {
 // Calculate net worth total
 export function netWorthTotal(totals: Record<CategoryId, number>): number {
   return CATEGORY_IDS.reduce((sum, id) => sum + (totals[id as CategoryId] || 0), 0);
+}
+
+// Get unique sub-categories
+export function getUniqueSubs(rows: ParsedRow[]): string[] {
+  const subs = new Set<string>();
+  for (const row of rows) {
+    if (row.sub) subs.add(row.sub);
+  }
+  return Array.from(subs).sort();
+}
+
+// Get unique years
+export function getUniqueYears(rows: ParsedRow[]): number[] {
+  const years = new Set<number>();
+  for (const row of rows) {
+    if (row.year) years.add(row.year);
+  }
+  return Array.from(years).sort();
 }

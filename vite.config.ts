@@ -6,5 +6,17 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify('2.52'),
   },
-  envPrefix: 'VITE_'
+  envPrefix: 'VITE_',
+  server: {
+    headers: {
+      'Content-Security-Policy': "script-src 'self' 'unsafe-eval' 'unsafe-inline'; object-src 'none';"
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
+  }
 })

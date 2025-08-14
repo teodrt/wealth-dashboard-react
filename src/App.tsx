@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, CartesianGrid, AreaChart, Area } from 'recharts';
 import { Upload as UploadIcon, Sparkles, TrendingUp, Filter, Search, PieChart as PieIcon, LineChart as LineIcon, ChevronLeft, ChevronRight, LayoutGrid, Download, HardDrive, BookOpen, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -11,8 +11,16 @@ import FiltersBar from './components/FiltersBar';
 import Uploader from './components/Uploader';
 import Header from './components/Header';
 import CategoriesCard from './components/CategoriesCard';
+
+// STATE: Dynamic filters + selectors
+import { useFiltersStore } from './store/filters';
+import { selectChartSeries, selectRightPanelStats, selectFilteredRows } from './selectors/portfolio';
 import { useDataStore } from './store/dataStore';
+import { useWealthData } from './hooks/useWealthData';
+import { useAutoRefresh } from './hooks/useAutoRefresh';
+import { DashboardSection, PaginationState } from './types/state';
 import { CATEGORIES } from './config/categories';
+import { env } from './config/env';
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number };
 
@@ -83,211 +91,64 @@ function Pager({ pages, index, setIndex }:{ pages: React.ReactNode[]; index: num
 }
 
 export default function App(){
-  const [query, setQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('All')
-  const [accountFilter, setAccountFilter] = useState<string>('All')
+  // STATE: Filters store (category/sub/dateRange) + local query text
+  const { category, sub, setCategory, setSub, reset } = useFiltersStore();
+  const [query, setQuery] = useState('');
+  const categoryFilter = category ?? 'All';
+  const accountFilter = sub ?? 'All';
+  const setCategoryFilter = (val: string) => setCategory(val === 'All' ? undefined : (val as any));
+  const setAccountFilter = (val: string) => setSub(val === 'All' ? undefined : val);
   
-  const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'|'Categories'>('Summary')
-  const [pageIdx, setPageIdx] = useState(0)
+  const [section, setSection] = useState<DashboardSection>('Summary');
+  const [pageIdx, setPageIdx] = useState(0);
   
-  const { raw: rows } = useDataStore();
+  // STATE: Data
+  const { positions, setRaw } = useWealthData();
+  // Derived lists
+  const categories = useMemo(()=> CATEGORIES.map(c => c.id), []);
+  const accounts = useMemo(()=>{
+    // Dynamic subs list based on selected category
+    const rows = selectFilteredRows(positions, { category: category as any, sub: undefined, dateRange: undefined });
+    const subs = new Set<string>();
+    rows.forEach(r => { if (r.sub) subs.add(r.sub) });
+    return Array.from(subs).sort();
+  }, [positions, category]);
 
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
-  const smooth = useRef<number>(0)
-  const target = useRef<number>(0)
-  const timer = useRef<any>(null)
-  const workerRef = useRef<Worker | null>(null)
+  // Selectors: chart series and right panel stats (single source of truth)
+  const monthlyData = useMemo(()=> selectChartSeries(positions, { category: category as any, sub, dateRange: undefined }), [positions, category, sub]);
+  const rightStats = useMemo(()=> selectRightPanelStats(positions, { category: category as any, sub, dateRange: undefined }), [positions, category, sub]);
+  const allocationByCategory = rightStats.allocationByCategory;
+  const allocationByAsset: { name: string; value: number }[] = useMemo(()=> {
+    // Aggregate by assetClass from normalized PortfolioPosition
+    const byAsset = new Map<string, number>();
+    const rows = selectFilteredRows(positions, { category: category as any, sub, dateRange: undefined });
+    rows.forEach(r => {
+      const key = (r as any).assetClass || 'Other';
+      byAsset.set(key, (byAsset.get(key) || 0) + r.amount);
+    });
+    return Array.from(byAsset.entries()).map(([name, value])=>({ name, value })).sort((a,b)=> b.value - a.value);
+  }, [positions, category, sub]);
 
-  // Legacy data loading - now handled by store
-  useEffect(()=>{ 
-    const v=localStorage.getItem("wd_rows_v21"); 
-    if(v){ 
-      try{ 
-        const p=JSON.parse(v); 
-        if(Array.isArray(p)) {
-          // Convert legacy format to new format
-          const converted = p.map((row: any) => ({
-            date: row.Date || row.date || '',
-                      // Convert legacy data to new matrix format
-          year: new Date(row.Date || row.date || new Date()).getFullYear(),
-          month: new Date(row.Date || row.date || new Date()).getMonth() + 1,
-          master: row.Category || row.category || 'alternatives',
-          sub: row.Account || row.account || 'Unknown',
-          amount: Number(row.Value || row.amount || 0)
-        }));
-        useDataStore.getState().setRaw(converted);
-        }
-      }catch(e){
-        console.error('Failed to load legacy data:', e);
-      }
-    } 
-  }, [])
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const smooth = useRef<number>(0);
+  const target = useRef<number>(0);
+  const workerRef = useRef<Worker | null>(null);
 
-  useEffect(()=>{
-    if(!loading){ if(timer.current){ clearInterval(timer.current); timer.current=null } return }
-    if(timer.current) clearInterval(timer.current)
-    timer.current = setInterval(()=>{
-      if(smooth.current < target.current){
-        smooth.current = Math.min(target.current, smooth.current + 1)
-        setProgress(Math.round(smooth.current))
-      } else if (target.current >= 99 && smooth.current >= 99){
-        clearInterval(timer.current); timer.current=null
-      }
-    }, 60)
-    return ()=>{ if(timer.current) clearInterval(timer.current) }
-  },[loading])
-
-  const data = useMemo(()=> rows || [], [rows])
-  const normalized = useMemo(()=> data.map(r => ({
-    ...r,
-    Date: new Date(r.year, typeof r.month === 'number' ? r.month - 1 : 0, 1).toISOString(),
-    Account: r.sub?.trim() || 'Manual',
-    Category: r.master || 'Other',
-    AssetClass: r.sub || 'Other',
-    Currency: 'EUR',
-    Value: typeof r.amount === 'string' ? Number(r.amount) : r.amount,
-  })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
-
-  // Reset account filter when category changes and current account is not available
-  useEffect(() => {
-    if (categoryFilter !== 'All' && accountFilter !== 'All') {
-      const availableAccounts = new Set<string>()
-      normalized.forEach(r => {
-        if (r.Category === categoryFilter) {
-          availableAccounts.add(r.Account || 'Unknown')
-        }
-      })
-      
-      if (!availableAccounts.has(accountFilter)) {
-        setAccountFilter('All')
-      }
+  // STATE: Using auto-refresh hook for progress updates
+  const handleProgressTick = useCallback(() => {
+    if (smooth.current < target.current) {
+      smooth.current = Math.min(target.current, smooth.current + 1);
+      setProgress(Math.round(smooth.current));
     }
-  }, [categoryFilter, accountFilter, normalized])
-
-
-
-  const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
+  }, []);
   
-  // Dynamic accounts based on selected category
-  const accounts = useMemo(()=> {
-    if (categoryFilter === 'All') {
-      return Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort()
-    } else {
-      // Filter accounts that have data in the selected category
-      const categoryAccounts = new Set<string>()
-      normalized.forEach(r => {
-        if (r.Category === categoryFilter) {
-          categoryAccounts.add(r.Account || 'Unknown')
-        }
-      })
-      return Array.from(categoryAccounts).sort()
-    }
-  }, [normalized, categoryFilter])
+  useAutoRefresh(loading, handleProgressTick, 60);
 
-  const filtered = useMemo(()=> normalized.filter(r => {
-    const q=query.toLowerCase();
-    const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true;
-    const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter;
-    const matchesAccount = accountFilter==='All' ? true : r.Account===accountFilter;
-    return matchesQuery && matchesCat && matchesAccount
-  }), [normalized, query, categoryFilter, accountFilter])
 
-  // Calculate last month data for header display - now uses filtered data
-  const lastMonthData = useMemo(() => {
-    if (!filtered || filtered.length === 0) return { total: 0, change: 0, changePercent: 0 };
-    
-    // Get unique months from filtered data
-    const months = [...new Set(filtered.map(r => r.Date))].sort();
-    
-    if (months.length === 0) return { total: 0, change: 0, changePercent: 0 };
-    
-    const lastMonth = months[months.length - 1];
-    const previousMonth = months.length > 1 ? months[months.length - 2] : lastMonth;
-    
-    // Get last month total from filtered data
-    const lastMonthTotal = filtered
-      .filter(r => r.Date === lastMonth)
-      .reduce((sum, r) => sum + (r.Value as number), 0);
-    
-    // Get previous month total from filtered data
-    const previousMonthTotal = filtered
-      .filter(r => r.Date === previousMonth)
-      .reduce((sum, r) => sum + (r.Value as number), 0);
-    
-    const change = lastMonthTotal - previousMonthTotal;
-    const changePercent = previousMonthTotal > 0 ? (change / previousMonthTotal) * 100 : 0;
-    
-    return {
-      total: lastMonthTotal,
-      change,
-      changePercent
-    };
-  }, [filtered]);
-
-  const byMonth = useMemo(()=>{ 
-    const map = new Map<string, number>(); 
-    filtered.forEach(r => { 
-      const k = monthKey(r.Date); 
-      map.set(k, (map.get(k)||0)+ (r.Value as number)) 
-    }); 
-    return Array.from(map.entries()).map(([k,v])=>({month:k, value:v})).sort((a,b)=>a.month.localeCompare(b.month)) 
-  },[filtered])
-
-  const latestByAccount = useMemo(()=>{ 
-    const accDates = new Map<string,string>(); 
-    filtered.forEach(r => { 
-      const k = r.Account; 
-      const m = monthKey(r.Date); 
-      if(!accDates.has(k) || m > (accDates.get(k) || '')) accDates.set(k,m) 
-    }); 
-    const totals = new Map<string, number>(); 
-    filtered.forEach(r => { 
-      const m = monthKey(r.Date); 
-      if (m === accDates.get(r.Account)) totals.set(r.Account, (totals.get(r.Account)||0) + (r.Value as number)) 
-    }); 
-    return Array.from(totals.entries()).map(([Account, Value])=>({Account, Value})).sort((a,b)=>b.Value-a.Value) 
-  },[filtered])
-
-  const allocationByAsset = useMemo(()=>{ 
-    const totals = new Map<string,number>(); 
-    const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; 
-    filtered.forEach(r => { 
-      if (monthKey(r.Date) === latestMonth) totals.set(r.AssetClass!, (totals.get(r.AssetClass!)||0) + (r.Value as number)) 
-    }); 
-    return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) 
-  },[filtered, byMonth])
-
-  const allocationByCategory = useMemo(()=>{ 
-    const totals = new Map<string,number>(); 
-    const latestMonth = byMonth.length? byMonth[byMonth.length-1].month : ''; 
-    filtered.forEach(r => { 
-      if (monthKey(r.Date) === latestMonth) totals.set(r.Category!, (totals.get(r.Category!)||0) + (r.Value as number)) 
-    }); 
-    return Array.from(totals.entries()).map(([name, value])=>({name, value})).sort((a,b)=>b.value-a.value) 
-  },[filtered, byMonth])
-
-  const seriesByCategory = useMemo(()=>{
-    const obj: Record<string, {month:string, value:number}[]> = {}
-    categories.forEach(c => { obj[c] = [] })
-    filtered.forEach(r => {
-      const month = monthKey(r.Date)
-      const category = r.Category || 'Other'
-      if (obj[category]) {
-        const existing = obj[category].find(item => item.month === month)
-        if (existing) {
-          existing.value += r.Value as number
-        } else {
-          obj[category].push({ month, value: r.Value as number })
-        }
-      }
-    })
-    return Object.entries(obj).map(([name, data]) => ({
-      name,
-      data: data.sort((a, b) => a.month.localeCompare(b.month))
-    }))
-  }, [filtered, categories])
+  // Additional series per-category (optional, keep empty for now)
+  const seriesByCategory: { name: string; data: { month: string; value: number }[] }[] = []
 
   const onFile = useCallback(async (file: File) => {
     try {
@@ -296,6 +157,13 @@ export default function App(){
       setProgress(0)
       smooth.current = 0
       target.current = 0
+
+      // Check file size against environment configuration
+      if (file.size > env.maxFileSizeMB * 1024 * 1024) {
+        setErrorMsg(`File too large (>${env.maxFileSizeMB}MB).`);
+        setLoading(false);
+        return;
+      }
 
       const buffer = await file.arrayBuffer()
       
@@ -345,35 +213,19 @@ export default function App(){
   }, [])
 
   const resetFilters = useCallback(() => {
-    setQuery('')
-    setCategoryFilter('All')
-    setAccountFilter('All')
-  }, [])
+    setQuery('');
+    reset();
+  }, [reset])
 
   const clearAllData = useCallback(() => {
-    useDataStore.getState().clear()
-    localStorage.removeItem("wd_rows_v21")
-    resetFilters()
+    useDataStore.getState().clear();
+    localStorage.removeItem("wd_rows_v21");
+    resetFilters();
   }, [resetFilters])
 
-  const netWorth = useMemo(() => {
-    if (!filtered.length) return 0
-    const latestMonth = byMonth.length ? byMonth[byMonth.length - 1].month : ''
-    return filtered
-      .filter(r => monthKey(r.Date) === latestMonth)
-      .reduce((sum, r) => sum + (r.Value as number), 0)
-  }, [filtered, byMonth])
-
-  const previousNetWorth = useMemo(() => {
-    if (byMonth.length < 2) return 0
-    const previousMonth = byMonth[byMonth.length - 2].month
-    return filtered
-      .filter(r => monthKey(r.Date) === previousMonth)
-      .reduce((sum, r) => sum + (r.Value as number), 0)
-  }, [filtered, byMonth])
-
-  const delta = netWorth - previousNetWorth
-  const deltaPct = previousNetWorth ? (delta / previousNetWorth) * 100 : 0
+  const netWorth = rightStats.total;
+  const delta = rightStats.change;
+  const deltaPct = rightStats.changePercent;
 
   const pages = [
     <div key="summary" className="summary-page">
@@ -401,9 +253,9 @@ export default function App(){
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <GlassCard className="chart-card">
           <h3>Portfolio performance</h3>
-          {byMonth.length > 0 ? (
+          {monthlyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={byMonth}>
+              <LineChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                 <XAxis 
                   dataKey="month" 
@@ -464,7 +316,7 @@ export default function App(){
               </Pie>
               <Tooltip formatter={(value) => numberFormat(value as number)} />
             </PieChart>
-          </ResponsiveContainer>
+        </ResponsiveContainer>
         </GlassCard>
       </div>
     </div>,
@@ -477,7 +329,7 @@ export default function App(){
               <GlassCard className="net-worth-chart">
           <h3>Net Worth Timeline</h3>
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={byMonth}>
+            <LineChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
               <XAxis 
                 dataKey="month" 
@@ -552,15 +404,15 @@ export default function App(){
       <GlassCard className="accounts-overview">
         <h3>Accounts Overview</h3>
         <div className="accounts-list">
-          {latestByAccount.map(account => (
-            <div key={account.Account} className="account-item">
-              <div className="account-name">{account.Account}</div>
-              <div className="account-value">{numberFormat(account.Value)}</div>
+          {([] as any[]).map((account: any) => (
+            <div key={String(account?.Account)} className="account-item">
+              <div className="account-name">{String(account?.Account)}</div>
+              <div className="account-value">{numberFormat(Number(account?.Value || 0))}</div>
             </div>
           ))}
         </div>
       </GlassCard>
-    </div>
+      </div>
   ]
 
   return (
@@ -569,10 +421,10 @@ export default function App(){
       <div className="main-content">
         {/* Header Section */}
         <Header 
-          filteredData={filtered}
+          filteredData={[]}
           categoryFilter={categoryFilter}
           accountFilter={accountFilter}
-          lastMonthData={lastMonthData}
+          lastMonthData={{ total: netWorth, change: delta, changePercent: deltaPct }}
           netWorth={netWorth}
         />
 
@@ -585,9 +437,9 @@ export default function App(){
             </div>
             
             <div className="chart-container">
-              {byMonth.length > 0 && byMonth.some(item => item.value > 0) ? (
+              {monthlyData.length > 0 && monthlyData.some(item => item.value > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={byMonth}>
+                  <LineChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                     <XAxis 
                       dataKey="month" 
@@ -647,10 +499,10 @@ export default function App(){
             {/* Monthly Change Card */}
             <div className="asset-card">
               <div className="asset-label">Monthly Change</div>
-              <div className="asset-value">€{numberFormatCompact(lastMonthData.change)}</div>
+              <div className="asset-value">€{numberFormatCompact(delta)}</div>
               <div className="asset-change positive">
                 <span>↑</span>
-                <span>{lastMonthData.changePercent.toFixed(1)}%</span>
+                <span>{deltaPct.toFixed(1)}%</span>
               </div>
             </div>
 
@@ -713,7 +565,7 @@ export default function App(){
             <div className="chart-container">
               {seriesByCategory.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={byMonth}>
+                  <AreaChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                     <XAxis 
                       dataKey="month" 

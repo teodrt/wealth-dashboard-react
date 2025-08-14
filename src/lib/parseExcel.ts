@@ -133,18 +133,34 @@ function parseMonth(value: any): string | number {
 
 // Parse Excel/CSV file in matrix format
 export async function parseFile(
-  file: File, 
+  file: File,
   options: { onProgress?: (ratio: number) => void } = {}
 ): Promise<ParsedRow[]> {
   const { onProgress } = options;
-  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-  
-  if (fileExtension === '.csv') {
-    return parseCSV(file, { onProgress });
-  } else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-    return parseXLSX(file, { onProgress });
-  } else {
-    throw new Error(`Unsupported file type: ${fileExtension}`);
+  try {
+    const name = (file?.name || '').toLowerCase();
+    const dot = name.lastIndexOf('.');
+    const ext = dot >= 0 ? name.slice(dot + 1) : '';
+    console.info('[parse] ext', file?.name, file?.type, ext);
+
+    if (ext === 'csv') {
+      onProgress?.(0.02);
+      const rows = await parseCSV(file, { onProgress });
+      if (!rows.length) throw new Error('No valid rows parsed from CSV');
+      onProgress?.(1);
+      return rows;
+    }
+    if (ext === 'xlsx' || ext === 'xls') {
+      onProgress?.(0.02);
+      const rows = await parseXLSX(file, { onProgress });
+      if (!rows.length) throw new Error('No valid rows parsed from Excel');
+      onProgress?.(1);
+      return rows;
+    }
+    throw new Error(`Unsupported file type: .${ext}. Accepted: .csv, .xlsx, .xls`);
+  } catch (err: any) {
+    console.error('[parse] failed', err);
+    throw err;
   }
 }
 
@@ -300,7 +316,7 @@ function parseMatrix(
       
       // Report progress every 100 cells or at the end
       if (onProgress && (processedCells % 100 === 0 || processedCells === totalCells)) {
-        onProgress(processedCells / totalCells);
+        onProgress(Math.min(0.98, processedCells / totalCells));
       }
     }
   }
@@ -314,6 +330,9 @@ function parseMatrix(
     console.warn('Invalid headers mapped to alternatives:', invalidHeaders);
   }
   
+  if (!parsed.length) {
+    throw new Error('No valid rows parsed');
+  }
   return parsed;
 }
 

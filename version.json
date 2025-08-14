@@ -1,10 +1,10 @@
 {
-  "commit": "5aca39f869971af4fccc1ea58e0faf507b1023dd",
-  "shortCommit": "5aca39f",
-  "branch": "feat/ui-restore-252",
+  "commit": "e042b9cdad911fdf7ce36400ceb75dc8556c397c",
+  "shortCommit": "e042b9c",
+  "branch": "fix/csp-fonts",
   "tag": null,
-  "timestamp": "2025-08-14T17:28:21.486Z",
+  "timestamp": "2025-08-14T23:25:59.225Z",
   "version": "2.52",
-  "buildTime": "2025-08-14T17:28:21.486Z",
+  "buildTime": "2025-08-14T23:25:59.225Z",
   "environment": "development"
 }

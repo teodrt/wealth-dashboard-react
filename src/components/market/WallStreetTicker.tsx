@@ -13,9 +13,11 @@ interface WallStreetTickerProps {
   provider?: string;
 }
 
+import { env } from '../../config/env';
+
 export default function WallStreetTicker({ 
-  symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'],
-  provider = 'mock'
+  symbols = env.tickerSymbols,
+  provider = env.tickerProvider
 }: WallStreetTickerProps) {
   const [tickerData, setTickerData] = useState<TickerData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,8 +48,8 @@ export default function WallStreetTicker({
 
     fetchTickerData();
     
-    // Update every 30 seconds
-    const interval = setInterval(fetchTickerData, 30000);
+    // Update based on environment configuration
+    const interval = setInterval(fetchTickerData, env.tickerRefreshIntervalMs);
     return () => clearInterval(interval);
   }, [symbols, provider]);
 

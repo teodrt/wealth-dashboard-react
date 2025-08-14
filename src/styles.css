@@ -1,3 +1,6 @@
+/* Import UI component styles */
+@import './ui/styles.css';
+
 /* CRYPTO WALLET PRO Inspired Design */
 
 :root {

@@ -1,3 +1,5 @@
+import { env } from '../config/env';
+
 export const CSP_DEV = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:",
@@ -5,7 +7,7 @@ export const CSP_DEV = [
   "style-src-elem 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "img-src 'self' data: blob:",
-  "connect-src 'self' ws://localhost:* http://localhost:* https://api.polygon.io https://newsapi.org https://content.guardianapis.com",
+  `connect-src 'self' ws://localhost:* http://localhost:* ${env.cspConnectSrc.join(' ')}`,
   "worker-src 'self' blob:",
   "frame-ancestors 'self'"
 ].join("; ");
@@ -17,7 +19,7 @@ export const CSP_PROD = [
   "style-src-elem 'self'",
   "font-src 'self' data:",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https://api.polygon.io https://newsapi.org https://content.guardianapis.com",
+  `connect-src 'self' ${env.cspConnectSrc.join(' ')}`,
   "worker-src 'self' blob:",
   "frame-ancestors 'self'"
 ].join("; ");

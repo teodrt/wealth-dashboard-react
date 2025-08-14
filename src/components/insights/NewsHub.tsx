@@ -16,9 +16,11 @@ interface NewsHubProps {
   maxArticles?: number;
 }
 
+import { env } from '../../config/env';
+
 export default function NewsHub({ 
-  provider = 'mock', 
-  maxArticles = 6 
+  provider = env.newsProvider, 
+  maxArticles = env.newsMaxArticles 
 }: NewsHubProps) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,8 +95,8 @@ export default function NewsHub({
 
     fetchNews();
     
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchNews, 5 * 60 * 1000);
+    // Refresh based on environment configuration
+    const interval = setInterval(fetchNews, env.newsRefreshIntervalMs);
     return () => clearInterval(interval);
   }, [provider, maxArticles]);
 

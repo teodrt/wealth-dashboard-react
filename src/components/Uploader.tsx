@@ -48,6 +48,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
 
   // Robust upload handler with phase-based progress
   const onFileSelected = useCallback(async (file: File) => {
+    console.info('[upload] file selected', file?.name, file?.size, file?.type);
     try {
       // Prevent double-processing
       if (fileRef.current?.name === file.name && isBusy) {
@@ -83,8 +84,22 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
       
       // Phase 3: Commit to store (75-90%)
       setUploadStatus('Processing data...');
-      setRaw(parsedRows);
-      console.info('[upload] committed', { rows: parsedRows.length });
+      // Convert ParsedRow -> PortfolioPosition[]
+      const portfolioPositions = parsedRows.map((row: any) => {
+        const y = Number(row.year);
+        const m = typeof row.month === 'number' ? row.month : parseInt(String(row.month), 10) || 1;
+        const iso = `${String(y).padStart(4,'0')}-${String(m).padStart(2,'0')}-01`;
+        return {
+          date: iso,
+          account: row.sub || 'Unknown',
+          category: row.master || 'alternatives',
+          assetClass: 'Other',
+          currency: 'EUR',
+          value: Number(row.amount || 0),
+        };
+      });
+      setRaw(portfolioPositions);
+      console.info('[upload] committed', { rows: portfolioPositions.length });
       bump(90);
       
       // Phase 4: Finalize and wait for next paint (90-99%)
@@ -119,7 +134,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
       
     } catch (err: any) {
       console.error('UPLOAD/PARSE ERROR', err);
-      setErrorMessage(err?.message || 'Failed to parse file');
+      setErrorMessage(err?.message || 'Failed to parse file. Accepted: .csv, .xlsx, .xls');
       // Do NOT reset progress to 0 - leave bar where it got to
     } finally {
       setIsBusy(false);
@@ -200,6 +215,29 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
             </button>
           )}
         </div>
+
+        {(import.meta as any).env?.MODE !== 'production' && (
+          <div style={{ marginTop: 8 }}>
+            <button
+              className="btn btn-outline"
+              onClick={async () => {
+                try {
+                  setIsBusy(true);
+                  setUploadStatus('Loading mock CSV...');
+                  const res = await fetch('/mocks/sample-portfolio.csv');
+                  const text = await res.text();
+                  const blob = new Blob([text], { type: 'text/csv' });
+                  const mockFile = new File([blob], 'sample-portfolio.csv', { type: 'text/csv' });
+                  await onFileSelected(mockFile);
+                } catch (e: any) {
+                  setErrorMessage(e?.message || 'Failed to load mock CSV');
+                }
+              }}
+            >
+              Load Mock CSV (dev)
+            </button>
+          </div>
+        )}
 
         {isBusy && (
           <div className="progress-container">

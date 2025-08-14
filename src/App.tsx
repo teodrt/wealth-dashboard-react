@@ -12,7 +12,7 @@ import Uploader from './components/Uploader';
 import Header from './components/Header';
 import CategoriesCard from './components/CategoriesCard';
 import { useDataStore } from './store/dataStore';
-import { deriveAll } from './lib/derive';
+import { CATEGORIES } from './config/categories';
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number };
 
@@ -129,7 +129,7 @@ export default function App(){
     Value: typeof r.amount === 'string' ? Number(r.amount) : r.amount,
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
 
-  const categories = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Category || 'Other'))).sort(), [normalized])
+  const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
   const accounts = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort(), [normalized])
 
   const filtered = useMemo(()=> normalized.filter(r => {

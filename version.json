@@ -1,10 +1,10 @@
 {
-  "commit": "67d757474a1ccbd8d7b913056306926a0478c195",
-  "shortCommit": "67d7574",
+  "commit": "e5aad91054d3cdb420d825dbaa7b0e95618155a3",
+  "shortCommit": "e5aad91",
   "branch": "feat/ui-restore-252",
-  "tag": "v2.52-ui-restore",
-  "timestamp": "2025-08-14T16:17:35.343Z",
+  "tag": null,
+  "timestamp": "2025-08-14T16:25:36.810Z",
   "version": "2.52",
-  "buildTime": "2025-08-14T16:17:35.343Z",
+  "buildTime": "2025-08-14T16:25:36.810Z",
   "environment": "development"
 }

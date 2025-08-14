@@ -3,8 +3,7 @@ import { Upload as UploadIcon, X, AlertCircle } from 'lucide-react';
 import GlassCard from './GlassCard';
 import ErrorBanner from './system/ErrorBanner';
 import { debug, info, warn, error } from '../lib/debug';
-import { normalizeRows } from '../lib/normalize';
-import { deriveAll } from '../lib/derive';
+import { parseFile } from '../lib/parseExcel';
 import { useDataStore } from '../store/dataStore';
 
 interface UploaderProps {
@@ -63,35 +62,44 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
     onError?.(message);
   }, [resetState, onError]);
 
-  const finalize = useCallback((rows: any[]) => {
-    console.info('[upload] finalize called', { rows: rows.length });
+  const finalize = useCallback(async (input: File | any[]) => {
+    console.info('[upload] finalize called', { input: input instanceof File ? input.name : 'parsed-rows' });
     
     try {
-      // Normalize rows
-      const normalized = normalizeRows(rows);
-      console.info('[upload] normalized', { normalized: normalized.length });
+      let parsedRows;
       
-      if (normalized.length === 0) {
+      if (input instanceof File) {
+        // Parse file using new parser
+        parsedRows = await parseFile(input);
+        console.info('[upload] parsed', { rows: parsedRows.length });
+      } else {
+        // Use pre-parsed rows (fallback case)
+        parsedRows = input;
+        console.info('[upload] using pre-parsed rows', { rows: parsedRows.length });
+      }
+      
+      if (parsedRows.length === 0) {
         showError('No valid data found', 'All rows were empty or missing required fields');
         return;
       }
       
-      // Commit to store
-      setRaw(normalized);
-      console.info('[upload] committed', { rows: normalized.length });
+      // Commit to store (this will also calculate totals and net worth)
+      setRaw(parsedRows);
+      console.info('[upload] committed', { rows: parsedRows.length });
       
-      // Derive data for UI
-      const derived = deriveAll(normalized);
-      console.info('[upload] derived', derived);
+      // Check if any items were assigned to alternatives
+      const alternativesCount = parsedRows.filter(row => row.category === 'alternatives').length;
+      if (alternativesCount > 0) {
+        setUploadStatus(`Imported ${parsedRows.length} rows (${alternativesCount} assigned to Alternatives)`);
+      } else {
+        setUploadStatus(`Imported ${parsedRows.length} rows`);
+      }
       
-      // Update UI
-      setProgress(100);
-      setUploadStatus(`Imported ${normalized.length} rows`);
       setIsUploading(false);
       isUploadingRef.current = false;
       
       // Call legacy callback for compatibility
-      onDataParsed(normalized);
+      onDataParsed(parsedRows);
       
       // Clear commit timeout
       if (commitTimeoutRef.current) {
@@ -220,8 +228,8 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
         parseWithFallback(buffer);
       }, 5000);
 
-      // Temporarily use fallback parsing only (worker disabled for build)
-      parseWithFallback(buffer);
+      // Use new parser
+      finalize(file);
 
     } catch (err: any) {
       error('File reading failed', err);

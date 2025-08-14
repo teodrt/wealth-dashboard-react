@@ -1,9 +1,11 @@
 import { create } from 'zustand';
+import { ParsedRow, aggregateTotals, netWorthTotal } from '../lib/parseExcel';
+import { CategoryId } from '../config/categories';
 
 export type Txn = {
   date: string;
   account: string;
-  category: string;
+  category: CategoryId;
   asset?: string;
   amount: number;
   currency?: string;
@@ -11,21 +13,31 @@ export type Txn = {
 };
 
 export type DataState = {
-  raw: Txn[];
-  setRaw: (rows: Txn[]) => void;
+  raw: ParsedRow[];
+  totals: Record<CategoryId, number>;
+  netWorth: number;
+  setRaw: (rows: ParsedRow[]) => void;
   clear: () => void;
   getCount: () => number;
+  getTotals: () => Record<CategoryId, number>;
+  getNetWorth: () => number;
 };
 
 export const useDataStore = create<DataState>((set, get) => ({
   raw: [],
-  setRaw: (rows: Txn[]) => {
+  totals: {} as Record<CategoryId, number>,
+  netWorth: 0,
+  setRaw: (rows: ParsedRow[]) => {
     console.info('[store] setRaw', { rows: rows.length });
-    set({ raw: rows });
+    const totals = aggregateTotals(rows);
+    const netWorth = netWorthTotal(totals);
+    set({ raw: rows, totals, netWorth });
   },
   clear: () => {
     console.info('[store] clear');
-    set({ raw: [] });
+    set({ raw: [], totals: {} as Record<CategoryId, number>, netWorth: 0 });
   },
   getCount: () => get().raw.length,
+  getTotals: () => get().totals,
+  getNetWorth: () => get().netWorth,
 }));

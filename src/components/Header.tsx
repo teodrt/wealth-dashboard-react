@@ -1,32 +1,32 @@
 import React from 'react';
 import { formatCurrencyEU, formatDelta, formatInitials } from '../lib/format';
 import GlassCard from './ui/GlassCard';
+import { APP_VERSION } from '../constants/version';
+import { useDataStore } from '../store/dataStore';
 
 interface HeaderProps {
   userName?: string;
   userHandle?: string;
-  balance?: number;
   dailyChange?: number;
   dailyChangePercent?: number;
-  trboValue?: number;
   trboChangePercent?: number;
-  blzValue?: number;
   blzChangePercent?: number;
 }
 
 export default function Header({
   userName = 'Teo D\'Ortenzio',
   userHandle = '@teodortenzio',
-  balance = 655267,
   dailyChange = 7885,
   dailyChangePercent = 1.2,
-  trboValue = 655267,
   trboChangePercent = 424,
-  blzValue = 0,
   blzChangePercent = 0
 }: HeaderProps) {
   const initials = formatInitials(userName);
   const delta = formatDelta(dailyChange);
+  
+  const { netWorth } = useDataStore();
+  const trboValue = netWorth;
+  const blzValue = 0; // Placeholder for now
   
   return (
     <div className="header-section">
@@ -46,7 +46,7 @@ export default function Header({
         <h1 className="wealth-title">WEALTH</h1>
         <p className="welcome-text">Hi Teo, welcome back to your portfolio</p>
         <div className="balance-display">
-          <div className="balance-amount">{formatCurrencyEU(balance)}</div>
+          <div className="balance-amount">{formatCurrencyEU(netWorth)}</div>
           <div className="balance-change" style={{ color: delta.color }}>
             ↑ {delta.formatted} (+{dailyChangePercent}%)
           </div>
@@ -75,7 +75,7 @@ export default function Header({
       {/* Version Badge */}
       <div className="version-badge">
         <GlassCard variant="chip" className="version-chip">
-          WD v2.52
+          WD v{APP_VERSION}
         </GlassCard>
       </div>
     </div>

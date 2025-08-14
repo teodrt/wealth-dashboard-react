@@ -1,52 +1,31 @@
 import React from 'react';
 import { formatCurrencyEU, formatDelta } from '../lib/format';
 import GlassCard from './ui/GlassCard';
+import { CATEGORIES } from '../config/categories';
+import { useDataStore } from '../store/dataStore';
 
-interface CategoriesCardProps {
-  categoryName?: string;
-  value?: number;
-  change?: number;
-  changePercent?: number;
-}
 
-export default function CategoriesCard({
-  categoryName = 'Real Estate',
-  value = 0,
-  change = 0,
-  changePercent = 0
-}: CategoriesCardProps) {
-  const delta = formatDelta(change);
+
+export default function CategoriesCard() {
+  const { totals, netWorth } = useDataStore();
   
   return (
-    <GlassCard className="categories-card">
-      <div className="categories-header">
-        <div className="category-info">
-          <div className="category-icon">📚🏠</div>
-          <div className="category-name">{categoryName}</div>
-        </div>
-        <div className="category-values">
-          <div className="category-value">{formatCurrencyEU(value)}</div>
-          <div className="category-change" style={{ color: delta.color }}>
-            {delta.formatted}
-          </div>
-        </div>
-      </div>
-      
-      <div className="categories-placeholder">
-        <div className="placeholder-area">
-          {/* Empty placeholder area with dashed border */}
-        </div>
-      </div>
-      
-      <div className="categories-pagination">
-        <div className="pagination-dots">
-          <div className="dot active"></div>
-          <div className="dot"></div>
-          <div className="dot"></div>
-          <div className="dot"></div>
-          <div className="dot"></div>
-        </div>
-      </div>
-    </GlassCard>
+    <div className="categories-grid">
+      {CATEGORIES.map((category) => {
+        const total = totals[category.id] || 0;
+        const percentage = netWorth > 0 ? (total / netWorth) * 100 : 0;
+        
+        return (
+          <GlassCard key={category.id} className="category-card">
+            <div className="category-header">
+              <div className="category-icon">{category.emoji}</div>
+              <div className="category-name">{category.label}</div>
+            </div>
+            <div className="category-value">{formatCurrencyEU(total)}</div>
+            <div className="category-percentage">{percentage.toFixed(1)}%</div>
+          </GlassCard>
+        );
+      })}
+    </div>
   );
 }

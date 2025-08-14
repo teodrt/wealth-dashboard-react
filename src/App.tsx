@@ -166,25 +166,25 @@ export default function App(){
     }
   }, [categoryFilter, accountFilter, normalized])
 
-  // Calculate last month data for header display
+  // Calculate last month data for header display - now uses filtered data
   const lastMonthData = useMemo(() => {
-    if (!normalized || normalized.length === 0) return { total: 0, change: 0, changePercent: 0 };
+    if (!filtered || filtered.length === 0) return { total: 0, change: 0, changePercent: 0 };
     
-    // Get unique months
-    const months = [...new Set(normalized.map(r => r.Date))].sort();
+    // Get unique months from filtered data
+    const months = [...new Set(filtered.map(r => r.Date))].sort();
     
     if (months.length === 0) return { total: 0, change: 0, changePercent: 0 };
     
     const lastMonth = months[months.length - 1];
     const previousMonth = months.length > 1 ? months[months.length - 2] : lastMonth;
     
-    // Get last month total
-    const lastMonthTotal = normalized
+    // Get last month total from filtered data
+    const lastMonthTotal = filtered
       .filter(r => r.Date === lastMonth)
       .reduce((sum, r) => sum + (r.Value as number), 0);
     
-    // Get previous month total
-    const previousMonthTotal = normalized
+    // Get previous month total from filtered data
+    const previousMonthTotal = filtered
       .filter(r => r.Date === previousMonth)
       .reduce((sum, r) => sum + (r.Value as number), 0);
     
@@ -196,7 +196,7 @@ export default function App(){
       change,
       changePercent
     };
-  }, [normalized]);
+  }, [filtered]);
 
   const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
   
@@ -655,7 +655,7 @@ export default function App(){
             {/* Portfolio Diversity Card */}
             <div className="asset-card">
               <div className="asset-label">Portfolio Diversity</div>
-              <div className="asset-value">{categories.length}</div>
+              <div className="asset-value">{allocationByCategory.length}</div>
               <div className="asset-change positive">
                 <span>↑</span>
                 <span>Categories</span>

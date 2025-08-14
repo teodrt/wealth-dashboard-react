@@ -570,6 +570,8 @@ export default function App(){
           filteredData={filtered}
           categoryFilter={categoryFilter}
           accountFilter={accountFilter}
+          lastMonthData={lastMonthData}
+          netWorth={netWorth}
         />
 
         {/* Dashboard Grid */}

@@ -3,6 +3,9 @@ import { Upload as UploadIcon, X, AlertCircle } from 'lucide-react';
 import GlassCard from './GlassCard';
 import ErrorBanner from './system/ErrorBanner';
 import { debug, info, warn, error } from '../lib/debug';
+import { normalizeRows } from '../lib/normalize';
+import { deriveAll } from '../lib/derive';
+import { useDataStore } from '../store/dataStore';
 
 interface UploaderProps {
   onDataParsed: (data: any[]) => void;
@@ -15,10 +18,14 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
+  const [lastWorkerMessage, setLastWorkerMessage] = useState<any>(null);
   
   const workerRef = useRef<Worker | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const isUploadingRef = useRef(false);
+  const commitTimeoutRef = useRef<number | null>(null);
+  
+  const { setRaw } = useDataStore();
 
   const maxFileSizeMB = 25; // Default max file size
   const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
@@ -29,6 +36,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
     setErrorMessage('');
     setErrorDetails('');
     setUploadStatus('');
+    setLastWorkerMessage(null);
     isUploadingRef.current = false;
     
     if (workerRef.current) {
@@ -40,6 +48,11 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+      commitTimeoutRef.current = null;
+    }
   }, []);
 
   const showError = useCallback((message: string, details?: string) => {
@@ -49,6 +62,48 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
     resetState();
     onError?.(message);
   }, [resetState, onError]);
+
+  const finalize = useCallback((rows: any[]) => {
+    console.info('[upload] finalize called', { rows: rows.length });
+    
+    try {
+      // Normalize rows
+      const normalized = normalizeRows(rows);
+      console.info('[upload] normalized', { normalized: normalized.length });
+      
+      if (normalized.length === 0) {
+        showError('No valid data found', 'All rows were empty or missing required fields');
+        return;
+      }
+      
+      // Commit to store
+      setRaw(normalized);
+      console.info('[upload] committed', { rows: normalized.length });
+      
+      // Derive data for UI
+      const derived = deriveAll(normalized);
+      console.info('[upload] derived', derived);
+      
+      // Update UI
+      setProgress(100);
+      setUploadStatus(`Imported ${normalized.length} rows`);
+      setIsUploading(false);
+      isUploadingRef.current = false;
+      
+      // Call legacy callback for compatibility
+      onDataParsed(normalized);
+      
+      // Clear commit timeout
+      if (commitTimeoutRef.current) {
+        clearTimeout(commitTimeoutRef.current);
+        commitTimeoutRef.current = null;
+      }
+      
+    } catch (err: any) {
+      console.error('[upload] finalize error', err);
+      showError('Data processing failed', err.message);
+    }
+  }, [setRaw, showError, onDataParsed]);
 
   const parseWithFallback = useCallback(async (buffer: ArrayBuffer) => {
     info('Starting fallback parsing');
@@ -104,13 +159,13 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
       setUploadStatus('Parsing complete');
       
       info('Fallback parsing completed', { rows: processedRows.length });
-      onDataParsed(processedRows);
+      finalize(processedRows);
       
     } catch (err: any) {
       error('Fallback parsing failed', err);
       showError('Fallback parsing failed', err?.message || String(err));
     }
-  }, [showError, onDataParsed]);
+  }, [showError, finalize]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     if (isUploadingRef.current) {
@@ -165,7 +220,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
         parseWithFallback(buffer);
       }, 5000);
 
-      // Temporarily use fallback parsing only
+      // Temporarily use fallback parsing only (worker disabled for build)
       parseWithFallback(buffer);
 
     } catch (err: any) {
@@ -248,6 +303,21 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
           setErrorDetails('');
         }}
       />
+      
+      {/* Debug Panel */}
+      {true && (
+        <div className="debug-panel">
+          <h4>Debug Info</h4>
+          <div className="debug-section">
+            <strong>Last Worker Message:</strong>
+            <pre>{JSON.stringify(lastWorkerMessage, null, 2)}</pre>
+          </div>
+          <div className="debug-section">
+            <strong>Store Count:</strong>
+            <span>{useDataStore.getState().getCount()} rows</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

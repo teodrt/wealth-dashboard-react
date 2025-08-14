@@ -11,6 +11,8 @@ import FiltersBar from './components/FiltersBar';
 import Uploader from './components/Uploader';
 import Header from './components/Header';
 import CategoriesCard from './components/CategoriesCard';
+import { useDataStore } from './store/dataStore';
+import { deriveAll } from './lib/derive';
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number };
 
@@ -61,12 +63,13 @@ function Pager({ pages, index, setIndex }:{ pages: React.ReactNode[]; index: num
 }
 
 export default function App(){
-  const [rows, setRows] = useState<BalanceRow[] | null>(null)
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
   const [accountFilter, setAccountFilter] = useState<string>('All')
   const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'|'Categories'>('Summary')
   const [pageIdx, setPageIdx] = useState(0)
+  
+  const { raw: rows } = useDataStore();
 
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -76,7 +79,30 @@ export default function App(){
   const timer = useRef<any>(null)
   const workerRef = useRef<Worker | null>(null)
 
-  useEffect(()=>{ const v=localStorage.getItem("wd_rows_v21"); if(v){ try{ const p=JSON.parse(v); if(Array.isArray(p)) setRows(p) }catch{}} }, [])
+  // Legacy data loading - now handled by store
+  useEffect(()=>{ 
+    const v=localStorage.getItem("wd_rows_v21"); 
+    if(v){ 
+      try{ 
+        const p=JSON.parse(v); 
+        if(Array.isArray(p)) {
+          // Convert legacy format to new format
+          const converted = p.map((row: any) => ({
+            date: row.Date || row.date || '',
+            account: row.Account || row.account || 'Unknown',
+            category: row.Category || row.category || 'Other',
+            asset: row.AssetClass || row.asset || 'Other',
+            currency: row.Currency || row.currency || 'EUR',
+            amount: Number(row.Value || row.amount || 0),
+            note: row.note || ''
+          }));
+          useDataStore.getState().setRaw(converted);
+        }
+      }catch(e){
+        console.error('Failed to load legacy data:', e);
+      }
+    } 
+  }, [])
 
   useEffect(()=>{
     if(!loading){ if(timer.current){ clearInterval(timer.current); timer.current=null } return }
@@ -92,15 +118,15 @@ export default function App(){
     return ()=>{ if(timer.current) clearInterval(timer.current) }
   },[loading])
 
-  const data = useMemo(()=> rows && rows.length? rows : [], [rows])
+  const data = useMemo(()=> rows || [], [rows])
   const normalized = useMemo(()=> data.map(r => ({
     ...r,
-    Date: parseDate(r.Date),
-    Account: r.Account?.trim() || 'Manual',
-    Category: r.Category || 'Other',
-    AssetClass: r.AssetClass || 'Other',
-    Currency: r.Currency || 'EUR',
-    Value: typeof (r as any).Value === 'string' ? Number((r as any).Value) : (r as any).Value,
+    Date: parseDate(r.date),
+    Account: r.account?.trim() || 'Manual',
+    Category: r.category || 'Other',
+    AssetClass: r.asset || 'Other',
+    Currency: r.currency || 'EUR',
+    Value: typeof r.amount === 'string' ? Number(r.amount) : r.amount,
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
 
   const categories = useMemo(()=> Array.from(new Set(normalized.map(r=>r.Category || 'Other'))).sort(), [normalized])
@@ -209,7 +235,8 @@ export default function App(){
             Value: Number(row.Value || row.F || row['6'] || 0)
           })).filter((r: any) => r.Date && !isNaN(r.Value))
           
-          setRows(parsedRows)
+          // Data is now handled by the store
+          console.log('Legacy setRows called - data handled by store');
           localStorage.setItem("wd_rows_v21", JSON.stringify(parsedRows))
           setLoading(false)
           target.current = 100
@@ -238,7 +265,7 @@ export default function App(){
   }, [])
 
   const clearAllData = useCallback(() => {
-    setRows(null)
+    useDataStore.getState().clear()
     localStorage.removeItem("wd_rows_v21")
     resetFilters()
   }, [resetFilters])
@@ -458,24 +485,15 @@ export default function App(){
           />
 
           {/* Upload Section */}
-          <Uploader
-            onDataParsed={(parsedRows) => {
-              const processedRows = parsedRows.map((row: any) => ({
-                Date: row[0] || row.Date || '',
-                Account: row[1] || row.Account || 'Unknown',
-                Category: row[2] || row.Category || 'Other',
-                AssetClass: row[3] || row.AssetClass || 'Other',
-                Currency: row[4] || row.Currency || 'EUR',
-                Value: Number(row[5] || row.Value || 0)
-              })).filter((r: any) => r.Date && !isNaN(r.Value));
-              
-              setRows(processedRows);
-              localStorage.setItem("wd_rows_v21", JSON.stringify(processedRows));
-            }}
-            onError={(errorMsg) => {
-              console.error('Upload error:', errorMsg);
-            }}
-          />
+                  <Uploader
+          onDataParsed={(parsedRows) => {
+            // Legacy callback - data is now handled by the store
+            console.log('Legacy callback received', parsedRows.length, 'rows');
+          }}
+          onError={(errorMsg) => {
+            console.error('Upload error:', errorMsg);
+          }}
+        />
         </div>
 
         {/* Right Column - Content */}

@@ -1,10 +1,10 @@
 {
-  "commit": "947f4f4e9949a3e66195766fa0bec69098b8ca30",
-  "shortCommit": "947f4f4",
-  "branch": "feature/recreate-v2.52",
-  "tag": null,
-  "timestamp": "2025-08-14T14:05:39.408Z",
+  "commit": "cc7ebb96b387e412e53adceb451dbd691f0daeca",
+  "shortCommit": "cc7ebb9",
+  "branch": "feat/ui-restore-252",
+  "tag": "v2.52-stabilized-2025.08.14",
+  "timestamp": "2025-08-14T16:03:04.182Z",
   "version": "2.52",
-  "buildTime": "2025-08-14T14:05:39.408Z",
+  "buildTime": "2025-08-14T16:03:04.182Z",
   "environment": "development"
 }

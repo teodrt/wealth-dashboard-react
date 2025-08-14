@@ -8,6 +8,9 @@ import GlassCard from './components/GlassCard';
 import WallStreetTicker from './components/market/WallStreetTicker';
 import NewsHub from './components/insights/NewsHub';
 import FiltersBar from './components/FiltersBar';
+import Uploader from './components/Uploader';
+import Header from './components/Header';
+import CategoriesCard from './components/CategoriesCard';
 
 type BalanceRow = { Date: string; Account: string; Category?: string; AssetClass?: string; Currency?: string; Value: number };
 
@@ -284,16 +287,44 @@ export default function App(){
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <GlassCard className="chart-card">
-          <h3>Net Worth Over Time</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={byMonth}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip formatter={(value) => numberFormat(value as number)} />
-              <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
+          <h3>Portfolio performance</h3>
+          {byMonth.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={byMonth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="rgba(255, 255, 255, 0.7)"
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="rgba(255, 255, 255, 0.7)"
+                  fontSize={12}
+                  tickFormatter={(value) => numberFormat(value)}
+                />
+                <Tooltip 
+                  formatter={(value) => numberFormat(value as number)}
+                  contentStyle={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    color: 'white'
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#ffffff" 
+                  strokeWidth={3} 
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="empty-state">
+              <p>No data available</p>
+            </div>
+          )}
         </GlassCard>
 
         <GlassCard className="chart-card">
@@ -322,35 +353,7 @@ export default function App(){
     </div>,
 
     <div key="categories" className="categories-page">
-      <GlassCard className="categories-overview">
-        <h3>Categories Overview</h3>
-        <div className="categories-grid">
-          {categories.map(category => {
-            const categoryData = seriesByCategory.find(s => s.name === category)
-            if (!categoryData) return null
-            
-            const latestValue = categoryData.data[categoryData.data.length - 1]?.value || 0
-            const previousValue = categoryData.data[categoryData.data.length - 2]?.value || 0
-            const change = latestValue - previousValue
-            const changePct = previousValue ? (change / previousValue) * 100 : 0
-            
-            return (
-              <GlassCard key={category} className="category-card">
-                <h4>{category}</h4>
-                <div className="category-value">{numberFormat(latestValue)}</div>
-                <div className={`category-change ${change >= 0 ? 'positive' : 'negative'}`}>
-                  {change >= 0 ? '+' : ''}{numberFormat(change)} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%)
-                </div>
-                <ResponsiveContainer width="100%" height={100}>
-                  <LineChart data={categoryData.data}>
-                    <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={1} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </GlassCard>
-            )
-          })}
-        </div>
-      </GlassCard>
+      <CategoriesCard />
     </div>,
 
     <div key="net-worth" className="net-worth-page">
@@ -439,10 +442,7 @@ export default function App(){
       <div className="dashboard-layout">
         {/* Left Column - Header & Summary */}
         <div className="left-column">
-          <GlassCard className="header-card">
-            <h1>💰 Wealth Dashboard</h1>
-            <p>Track your financial portfolio with real-time insights</p>
-          </GlassCard>
+          <Header />
 
           {/* Filters Section */}
           <FiltersBar
@@ -458,27 +458,24 @@ export default function App(){
           />
 
           {/* Upload Section */}
-          <GlassCard className="upload-section">
-            <h3><UploadIcon size={16} /> Upload Excel File</h3>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) onFile(file)
-              }}
-              className="file-input"
-            />
-            {loading && (
-              <div className="progress-container">
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-                </div>
-                <div className="progress-text">{progress}%</div>
-              </div>
-            )}
-            {errorMsg && <div className="error-message">{errorMsg}</div>}
-          </GlassCard>
+          <Uploader
+            onDataParsed={(parsedRows) => {
+              const processedRows = parsedRows.map((row: any) => ({
+                Date: row[0] || row.Date || '',
+                Account: row[1] || row.Account || 'Unknown',
+                Category: row[2] || row.Category || 'Other',
+                AssetClass: row[3] || row.AssetClass || 'Other',
+                Currency: row[4] || row.Currency || 'EUR',
+                Value: Number(row[5] || row.Value || 0)
+              })).filter((r: any) => r.Date && !isNaN(r.Value));
+              
+              setRows(processedRows);
+              localStorage.setItem("wd_rows_v21", JSON.stringify(processedRows));
+            }}
+            onError={(errorMsg) => {
+              console.error('Upload error:', errorMsg);
+            }}
+          />
         </div>
 
         {/* Right Column - Content */}
@@ -489,31 +486,25 @@ export default function App(){
               className={`tab ${section === 'Summary' ? 'active' : ''}`}
               onClick={() => setSection('Summary')}
             >
-              <LayoutGrid size={16} /> Summary
+              Overview
             </button>
             <button
               className={`tab ${section === 'Categories' ? 'active' : ''}`}
               onClick={() => setSection('Categories')}
             >
-              <PieIcon size={16} /> Categories
+              Categories
             </button>
             <button
               className={`tab ${section === 'Net Worth' ? 'active' : ''}`}
               onClick={() => setSection('Net Worth')}
             >
-              <LineIcon size={16} /> Net Worth
+              Insights
             </button>
             <button
               className={`tab ${section === 'Allocation' ? 'active' : ''}`}
               onClick={() => setSection('Allocation')}
             >
-              <PieIcon size={16} /> Allocation
-            </button>
-            <button
-              className={`tab ${section === 'Accounts' ? 'active' : ''}`}
-              onClick={() => setSection('Accounts')}
-            >
-              <BookOpen size={16} /> Accounts
+              Uploads
             </button>
           </div>
 

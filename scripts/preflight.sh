@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Wealth Dashboard v2.52 Preflight Script
-# This script ensures the development environment is ready and up-to-date
+# Preflight script - ensure latest state before running
+# Blocks stale states and ensures up-to-date code
 
 set -e
 
-echo "🚀 Wealth Dashboard v2.52 Preflight Check"
-echo "=========================================="
+echo "🚀 Preflight Check"
+echo "=================="
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -14,29 +14,52 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     exit 1
 fi
 
-# Get current git status
+# Fetch latest from all remotes
+echo "📥 Fetching latest from all remotes..."
+git fetch --all --tags --prune
+
+# Get current status
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 CURRENT_COMMIT=$(git rev-parse --short HEAD)
 LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "No tags found")
-UPSTREAM_BRANCH="origin/$CURRENT_BRANCH"
 
 echo "📍 Current branch: $CURRENT_BRANCH"
 echo "📍 Current commit: $CURRENT_COMMIT"
 echo "📍 Latest tag: $LATEST_TAG"
 
-# Check if we're behind upstream (for branches)
-if [ "$CURRENT_BRANCH" != "HEAD" ]; then
-    git fetch origin
-    LOCAL_COMMIT=$(git rev-parse HEAD)
-    REMOTE_COMMIT=$(git rev-parse $UPSTREAM_BRANCH 2>/dev/null || echo "no-upstream")
+# Check if we're on a tag
+if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
+    CURRENT_TAG=$(git describe --exact-match --tags HEAD)
+    echo "🏷️  Currently on tag: $CURRENT_TAG"
     
-    if [ "$REMOTE_COMMIT" != "no-upstream" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
-        echo "⚠️  Warning: Local branch is behind upstream"
-        echo "   Local:  $LOCAL_COMMIT"
-        echo "   Remote: $REMOTE_COMMIT"
+    # Ensure it's the latest tag by semver
+    if [ "$CURRENT_TAG" != "$LATEST_TAG" ]; then
+        echo "❌ Error: Not on the latest tag"
+        echo "   Current: $CURRENT_TAG"
+        echo "   Latest:  $LATEST_TAG"
         echo ""
-        echo "Consider running: git pull origin $CURRENT_BRANCH"
-        echo ""
+        echo "To fix: git checkout $LATEST_TAG"
+        exit 1
+    fi
+else
+    # We're on a branch, check if behind upstream
+    UPSTREAM_BRANCH="origin/$CURRENT_BRANCH"
+    
+    if git rev-parse $UPSTREAM_BRANCH >/dev/null 2>&1; then
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git rev-parse $UPSTREAM_BRANCH)
+        
+        if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+            # Check if we're behind
+            if git merge-base --is-ancestor $LOCAL_COMMIT $REMOTE_COMMIT 2>/dev/null; then
+                echo "❌ Error: Local branch is behind upstream"
+                echo "   Local:  $LOCAL_COMMIT"
+                echo "   Remote: $REMOTE_COMMIT"
+                echo ""
+                echo "To fix: git pull --rebase origin $CURRENT_BRANCH"
+                exit 1
+            fi
+        fi
     fi
 fi
 
@@ -60,6 +83,6 @@ fi
 echo ""
 echo "🎯 Preflight check complete!"
 echo "📍 Ready to run: npm run dev"
-echo "📍 Current version: $CURRENT_COMMIT"
+echo "📍 Current ref: $CURRENT_BRANCH@$CURRENT_COMMIT"
 echo ""
 

@@ -6,10 +6,14 @@
   "scripts": {
     "predev": "bash ./scripts/preflight.sh",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/inject-version.cjs",
+    "postbuild": "node scripts/inject-version.cjs",
     "preview": "vite preview",
     "clean": "rm -rf .next node_modules/.vite dist",
     "reinstall": "rm -rf node_modules && npm i",
+    "snapshot": "bash scripts/snapshot.sh",
+    "autosave:start": "node scripts/auto-commit.js start",
+    "autosave:stop": "node scripts/auto-commit.js stop",
     "version:sync": "node scripts/sync-version.cjs",
     "release:minor": "node scripts/bump.cjs minor && npm run version:sync && npm run build && node scripts/commit-push.cjs",
     "release:major": "node scripts/bump.cjs major && npm run version:sync && npm run build && node scripts/commit-push.cjs"

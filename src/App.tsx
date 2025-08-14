@@ -166,6 +166,34 @@ export default function App(){
     }
   }, [categoryFilter, accountFilter, normalized])
 
+
+
+  const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
+  
+  // Dynamic accounts based on selected category
+  const accounts = useMemo(()=> {
+    if (categoryFilter === 'All') {
+      return Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort()
+    } else {
+      // Filter accounts that have data in the selected category
+      const categoryAccounts = new Set<string>()
+      normalized.forEach(r => {
+        if (r.Category === categoryFilter) {
+          categoryAccounts.add(r.Account || 'Unknown')
+        }
+      })
+      return Array.from(categoryAccounts).sort()
+    }
+  }, [normalized, categoryFilter])
+
+  const filtered = useMemo(()=> normalized.filter(r => {
+    const q=query.toLowerCase();
+    const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true;
+    const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter;
+    const matchesAccount = accountFilter==='All' ? true : r.Account===accountFilter;
+    return matchesQuery && matchesCat && matchesAccount
+  }), [normalized, query, categoryFilter, accountFilter])
+
   // Calculate last month data for header display - now uses filtered data
   const lastMonthData = useMemo(() => {
     if (!filtered || filtered.length === 0) return { total: 0, change: 0, changePercent: 0 };
@@ -197,32 +225,6 @@ export default function App(){
       changePercent
     };
   }, [filtered]);
-
-  const categories = useMemo(()=> CATEGORIES.map(c => c.label), [])
-  
-  // Dynamic accounts based on selected category
-  const accounts = useMemo(()=> {
-    if (categoryFilter === 'All') {
-      return Array.from(new Set(normalized.map(r=>r.Account || 'Unknown'))).sort()
-    } else {
-      // Filter accounts that have data in the selected category
-      const categoryAccounts = new Set<string>()
-      normalized.forEach(r => {
-        if (r.Category === categoryFilter) {
-          categoryAccounts.add(r.Account || 'Unknown')
-        }
-      })
-      return Array.from(categoryAccounts).sort()
-    }
-  }, [normalized, categoryFilter])
-
-  const filtered = useMemo(()=> normalized.filter(r => {
-    const q=query.toLowerCase();
-    const matchesQuery = q? (r.Account.toLowerCase().includes(q) || r.Category!.toLowerCase().includes(q) || r.AssetClass!.toLowerCase().includes(q)) : true;
-    const matchesCat = categoryFilter==='All' ? true : r.Category===categoryFilter;
-    const matchesAccount = accountFilter==='All' ? true : r.Account===accountFilter;
-    return matchesQuery && matchesCat && matchesAccount
-  }), [normalized, query, categoryFilter, accountFilter])
 
   const byMonth = useMemo(()=>{ 
     const map = new Map<string, number>(); 

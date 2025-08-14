@@ -87,21 +87,6 @@ export default function App(){
   const [categoryFilter, setCategoryFilter] = useState<string>('All')
   const [accountFilter, setAccountFilter] = useState<string>('All')
   
-  // Reset account filter when category changes and current account is not available
-  useEffect(() => {
-    if (categoryFilter !== 'All' && accountFilter !== 'All') {
-      const availableAccounts = new Set<string>()
-      normalized.forEach(r => {
-        if (r.Category === categoryFilter) {
-          availableAccounts.add(r.Account || 'Unknown')
-        }
-      })
-      
-      if (!availableAccounts.has(accountFilter)) {
-        setAccountFilter('All')
-      }
-    }
-  }, [categoryFilter, accountFilter, normalized])
   const [section, setSection] = useState<'Summary'|'Net Worth'|'Allocation'|'Accounts'|'Categories'>('Summary')
   const [pageIdx, setPageIdx] = useState(0)
   
@@ -164,6 +149,22 @@ export default function App(){
     Currency: 'EUR',
     Value: typeof r.amount === 'string' ? Number(r.amount) : r.amount,
   })).filter(r => r.Date && !isNaN(r.Value as any)),[data])
+
+  // Reset account filter when category changes and current account is not available
+  useEffect(() => {
+    if (categoryFilter !== 'All' && accountFilter !== 'All') {
+      const availableAccounts = new Set<string>()
+      normalized.forEach(r => {
+        if (r.Category === categoryFilter) {
+          availableAccounts.add(r.Account || 'Unknown')
+        }
+      })
+      
+      if (!availableAccounts.has(accountFilter)) {
+        setAccountFilter('All')
+      }
+    }
+  }, [categoryFilter, accountFilter, normalized])
 
   // Calculate last month data for header display
   const lastMonthData = useMemo(() => {

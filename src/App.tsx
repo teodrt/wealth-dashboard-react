@@ -549,7 +549,7 @@ export default function App(){
             </div>
             
             <div className="chart-container">
-              {byMonth.length > 0 ? (
+              {byMonth.length > 0 && byMonth.some(item => item.value > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={byMonth}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />

@@ -1,5 +1,18 @@
 # Wealth Dashboard React
 
+## UI Baseline Restore
+Latest baseline:
+- Branch: `<will-be-filled-by-CI>`
+- Tag: `ui-baseline-<X.YY>`
+
+Rollback:
+```bash
+git fetch --all
+git checkout <branch above>
+# or
+git checkout tags/ui-baseline-<X.YY>
+```
+
 ## Stable Version Backup
 
 Current stable restore point: branch `stable-ui-performance-fix` / tag `v1.0.0-stable-scroll-fix`

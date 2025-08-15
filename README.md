@@ -13,6 +13,26 @@ git checkout stable-ui-performance-fix
 git checkout tags/v1.0.0-stable-scroll-fix
 ```
 
+## Stable Version Info
+
+Latest stable: branch `stable` / tag `last-stable`
+
+To restore:
+```bash
+git fetch --all
+git checkout stable
+# OR
+git checkout tags/last-stable
+```
+
+📌 Come ripristinare al volo in caso di problemi
+```bash
+git fetch --all
+git checkout stable
+# oppure
+git checkout tags/last-stable
+```
+
 A modern, responsive wealth management dashboard built with React, TypeScript, and Vite.
 
 ## Data persistence

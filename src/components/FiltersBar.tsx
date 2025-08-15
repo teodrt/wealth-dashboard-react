@@ -19,7 +19,7 @@ interface FiltersBarProps {
 	onResetData: () => void;
 }
 
-export default function FiltersBar({
+const FiltersBar = React.memo(function FiltersBar({
 	query,
 	setQuery,
 	categoryFilter,
@@ -169,5 +169,7 @@ export default function FiltersBar({
 			</div>
 		</GlassCard>
 	);
-}
+});
+
+export default FiltersBar;
 

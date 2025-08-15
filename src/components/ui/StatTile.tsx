@@ -26,7 +26,7 @@ export interface StatTileProps {
 }
 
 // StatTile component for consistent metric display
-export default function StatTile({
+const StatTile = React.memo(function StatTile({
   variant = 'default',
   size = 'md',
   title,
@@ -101,7 +101,9 @@ export default function StatTile({
       {content}
     </div>
   );
-}
+});
+
+export default StatTile;
 
 // Export stat tile variants for convenience
 export const StatTileVariants = {

@@ -1,10 +1,10 @@
 {
-  "commit": "6b5a1f604ca9577151e040e64deac2942d14b3ae",
-  "shortCommit": "6b5a1f6",
+  "commit": "4195512f4d984f6cbc5be688adfec597ea4c21d8",
+  "shortCommit": "4195512",
   "branch": "fix/csp-fonts",
-  "tag": "v2.52-stable-upload-fix",
-  "timestamp": "2025-08-14T23:48:46.749Z",
+  "tag": null,
+  "timestamp": "2025-08-15T10:12:29.694Z",
   "version": "2.52",
-  "buildTime": "2025-08-14T23:48:46.749Z",
+  "buildTime": "2025-08-15T10:12:29.694Z",
   "environment": "development"
 }

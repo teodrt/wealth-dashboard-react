@@ -16,7 +16,7 @@ interface HeaderProps {
   netWorth?: number;
 }
 
-export default function Header({
+const Header = React.memo(function Header({
   userName = 'Teo D\'Ortenzio',
   userHandle = '@teodortenzio',
   filteredData = [],
@@ -67,5 +67,7 @@ export default function Header({
       </div>
     </div>
   );
-}
+});
+
+export default Header;
 

@@ -7,7 +7,7 @@ interface GlassCardProps {
   style?: React.CSSProperties;
 }
 
-export default function GlassCard({ children, className = '', onClick, style }: GlassCardProps) {
+const GlassCard = React.memo(function GlassCard({ children, className = '', onClick, style }: GlassCardProps) {
   return (
     <div
       className={`glass-card ${className}`}
@@ -17,5 +17,7 @@ export default function GlassCard({ children, className = '', onClick, style }: 
       {children}
     </div>
   );
-}
+});
+
+export default GlassCard;
 

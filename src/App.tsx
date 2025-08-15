@@ -185,9 +185,8 @@ export default function App(){
             Value: Number(row.Value || row.F || row['6'] || 0)
           })).filter((r: any) => r.Date && !isNaN(r.Value))
           
-          // Data is now handled by the store
+          // Data is handled by the store (persisted via middleware)
           console.log('Legacy setRows called - data handled by store');
-          localStorage.setItem("wd_rows_v21", JSON.stringify(parsedRows))
           setLoading(false)
           target.current = 100
         } else if (type === 'error') {
@@ -215,7 +214,6 @@ export default function App(){
 
   const clearAllData = useCallback(() => {
     useDataStore.getState().clear();
-    localStorage.removeItem("wd_rows_v21");
     resetFilters();
   }, [resetFilters])
 
@@ -282,6 +280,7 @@ export default function App(){
                   stroke="#ffffff" 
                   strokeWidth={3} 
                   dot={false}
+                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -305,6 +304,7 @@ export default function App(){
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
+                isAnimationActive={false}
               >
                 {allocationByCategory.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={`hsl(${index * 60}, 70%, 50%)`} />
@@ -338,6 +338,7 @@ export default function App(){
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
+                isAnimationActive={false}
               >
                 {allocationByAsset.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={`hsl(${index * 60}, 70%, 50%)`} /> 
@@ -380,8 +381,10 @@ export default function App(){
 
   return (
     <div className="app">
+      {/* Background layer once per page (fixed, out of scroll flow) */}
+      <div className="app-bg" aria-hidden />
       {/* Main Content */}
-      <div className="main-content">
+      <div className="main-content app-content">
         {/* Header Section */}
         <Header 
           filteredData={[]}

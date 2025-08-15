@@ -2,6 +2,10 @@
 
 A modern, responsive wealth management dashboard built with React, TypeScript, and Vite.
 
+## Data persistence
+
+Client-side data is persisted in localStorage under the key `wd_rows_v3`. Only raw uploaded rows are stored; derived charts and aggregates are recomputed on app load.
+
 ## Configuration & Environment
 
 ### Environment Variables

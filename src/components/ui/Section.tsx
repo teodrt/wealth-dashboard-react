@@ -21,7 +21,7 @@ export interface SectionProps {
 }
 
 // Section component with consistent spacing and layout
-export default function Section({
+const Section = React.memo(function Section({
   variant = 'default',
   size = 'md',
   title,
@@ -72,7 +72,9 @@ export default function Section({
       </div>
     </section>
   );
-}
+});
+
+export default Section;
 
 // Export section variants for convenience
 export const SectionVariants = {

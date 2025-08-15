@@ -5,7 +5,7 @@ import { formatCurrencyEU } from '../lib/format';
 import { CATEGORIES } from '../config/categories';
 import { useDataStore } from '../store/dataStore';
 
-export default function CategoriesCard() {
+const CategoriesCard = React.memo(function CategoriesCard() {
   const { latestTotals, latestNetWorth } = useDataStore();
   
   return (
@@ -29,4 +29,6 @@ export default function CategoriesCard() {
       
     </div>
   );
-}
+});
+
+export default CategoriesCard;

@@ -8,7 +8,7 @@ interface GlassCardProps {
   variant?: 'default' | 'pill' | 'chip';
 }
 
-export default function GlassCard({ 
+const GlassCard = React.memo(function GlassCard({ 
   children, 
   className = '', 
   onClick, 
@@ -31,4 +31,6 @@ export default function GlassCard({
       {children}
     </div>
   );
-}
+});
+
+export default GlassCard;

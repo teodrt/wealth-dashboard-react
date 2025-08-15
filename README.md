@@ -1,5 +1,18 @@
 # Wealth Dashboard React
 
+## Stable Version Backup
+
+Current stable restore point: branch `stable-ui-performance-fix` / tag `v1.0.0-stable-scroll-fix`
+
+To revert:
+
+```bash
+git fetch --all
+git checkout stable-ui-performance-fix
+# OR
+git checkout tags/v1.0.0-stable-scroll-fix
+```
+
 A modern, responsive wealth management dashboard built with React, TypeScript, and Vite.
 
 ## Data persistence

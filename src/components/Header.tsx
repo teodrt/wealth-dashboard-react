@@ -44,14 +44,15 @@ const Header = React.memo(function Header({
       {/* Center: App Title & Balance */}
       <div className="app-title">
         <div className="app-name">WEALTH DASHBOARD</div>
-        <div className="pro-badge">PRO</div>
+        <div className="pro-badge"><span className="pro-star">⭐</span> PRO</div>
         <div className="welcome-text">Hi Teo, welcome back to your portfolio</div>
         
         {/* Main Balance */}
         <div className="balance-display">
-          <div className="balance-amount">{formatCurrencyEU(netWorth)}</div>
-          <div className="balance-change" style={{ color: delta.color }}>
-            {delta.isPositive ? '↑' : '↓'} {delta.formatted} ({delta.isPositive ? '+' : ''}{lastMonthData.changePercent.toFixed(1)}%)
+          <div className="balance-amount hero-value">{formatCurrencyEU(netWorth)}</div>
+          <div className="hero-performance">
+            <span className={`arrow ${delta.isPositive ? 'up' : 'down'}`}>{delta.isPositive ? '▲' : '▼'}</span>
+            <span className="change-value">{formatCurrencyEU(Math.abs(delta.isPositive ? lastMonthData.change : lastMonthData.change))} ({delta.isPositive ? '+' : ''}{lastMonthData.changePercent.toFixed(1)}%)</span>
           </div>
         </div>
       </div>

@@ -1,0 +1,30 @@
+🚀 Preflight Check
+==================
+📥 Fetching latest from all remotes...
+📍 Current branch: restore-baseline
+📍 Current commit: 1a62ee5
+📍 Latest tag: last-stable
+🏷️  Currently on tag: last-stable
+🧹 Clearing build caches...
+✅ Caches cleared
+📦 Checking dependencies...
+✅ Dependencies already installed
+
+🎯 Preflight check complete!
+📍 Ready to run: npm run dev
+📍 Current ref: restore-baseline@1a62ee5
+
+
+  VITE v5.4.19  ready in 1051 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+6:28:14 PM [vite] hmr update /src/components/Uploader.tsx
+6:28:30 PM [vite] hmr update /src/components/Header.tsx
+6:29:11 PM [vite] hmr update /src/styles.css
+6:29:36 PM [vite] .env.local changed, restarting server...
+6:29:36 PM [vite] server restarted.
+6:29:36 PM [vite] .env.local changed, restarting server...
+6:29:36 PM [vite] server restarted.
+6:29:44 PM [vite] hmr update /src/components/Uploader.tsx
+6:29:44 PM [vite] hmr update /src/components/Header.tsx
+6:29:44 PM [vite] hmr update /src/styles.css

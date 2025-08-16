@@ -6,6 +6,7 @@ import { CATEGORIES } from '../config/categories';
 import { useDataStore } from '../store/dataStore';
 import { selectAvailableSubs } from '../selectors/portfolio';
 import AutocompleteSearch, { Suggestion } from './AutocompleteSearch';
+import { CATEGORY_LABELS } from '../utils/categoryLabels';
 
 interface FiltersBarProps {
 	query?: string;
@@ -78,7 +79,7 @@ const FiltersBar = React.memo(function FiltersBar({
 								if (s.kind === 'category') {
 									if (setCategoryFilter) setCategoryFilter(s.id); else setCategory(s.id);
 									if (setAccountFilter) setAccountFilter('All'); else setSub(undefined);
-									setQuery?.(CATEGORIES.find(c => c.id === s.id)?.label || '');
+									setQuery?.(CATEGORY_LABELS[s.id] || s.id);
 								} else {
 									if (s.masters.length === 1) {
 										const m = s.masters[0];
@@ -109,7 +110,7 @@ const FiltersBar = React.memo(function FiltersBar({
 							<option value="All">All Categories</option>
 							{effectiveCategories.map(category => (
 								<option key={category} value={category}>
-									{category}
+									{CATEGORY_LABELS[category] || category}
 								</option>
 							))}
 						</select>

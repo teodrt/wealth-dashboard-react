@@ -1,10 +1,10 @@
 {
-  "commit": "4195512f4d984f6cbc5be688adfec597ea4c21d8",
-  "shortCommit": "4195512",
-  "branch": "fix/csp-fonts",
-  "tag": null,
-  "timestamp": "2025-08-15T10:12:29.694Z",
+  "commit": "1a62ee522c45b4f5eedc48d30926d76c955f1b39",
+  "shortCommit": "1a62ee5",
+  "branch": "restore-baseline",
+  "tag": "ferragosto",
+  "timestamp": "2025-08-16T07:14:58.017Z",
   "version": "2.52",
-  "buildTime": "2025-08-15T10:12:29.694Z",
+  "buildTime": "2025-08-16T07:14:58.017Z",
   "environment": "development"
 }

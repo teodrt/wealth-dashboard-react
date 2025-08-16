@@ -815,24 +815,8 @@ body {
   margin-right: 0.5rem;
 }
 
-/* Version Badge */
-.version-badge {
-  position: fixed;
-  top: 2rem;
-  right: 2rem;
-  z-index: 100;
-}
-
-.version-chip {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-full);
-  padding: 0.5rem 1rem;
-  color: var(--color-white);
-  font-size: 0.75rem;
-  font-weight: 500;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-}
+/* Version badge removed */
+.version-badge, .version-chip { display: none !important; }
 
 /* Responsive Design */
 @media (max-width: 1024px) {

@@ -216,28 +216,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
           )}
         </div>
 
-        {(import.meta as any).env?.MODE !== 'production' && (
-          <div style={{ marginTop: 8 }}>
-            <button
-              className="btn btn-outline"
-              onClick={async () => {
-                try {
-                  setIsBusy(true);
-                  setUploadStatus('Loading mock CSV...');
-                  const res = await fetch('/mocks/sample-portfolio.csv');
-                  const text = await res.text();
-                  const blob = new Blob([text], { type: 'text/csv' });
-                  const mockFile = new File([blob], 'sample-portfolio.csv', { type: 'text/csv' });
-                  await onFileSelected(mockFile);
-                } catch (e: any) {
-                  setErrorMessage(e?.message || 'Failed to load mock CSV');
-                }
-              }}
-            >
-              Load Mock CSV (dev)
-            </button>
-          </div>
-        )}
+        {false && null}
 
         {isBusy && (
           <div className="progress-container">
@@ -274,24 +253,7 @@ export default function Uploader({ onDataParsed, onError }: UploaderProps) {
         />
       )}
       
-      {/* Debug Panel */}
-      {true && (
-        <div className="debug-panel">
-          <h4>Debug Info</h4>
-          <div className="debug-section">
-            <strong>Current Progress:</strong>
-            <span>{progress}%</span>
-          </div>
-          <div className="debug-section">
-            <strong>Status:</strong>
-            <span>{uploadStatus}</span>
-          </div>
-          <div className="debug-section">
-            <strong>Store Count:</strong>
-            <span>{useDataStore.getState().getCount()} rows</span>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }

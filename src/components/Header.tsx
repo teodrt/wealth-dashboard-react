@@ -1,6 +1,5 @@
 import React from 'react';
 import { formatCurrencyEU, formatDelta, formatInitials } from '../lib/format';
-import { APP_VERSION } from '../constants/version';
 
 interface HeaderProps {
   userName?: string;
@@ -59,12 +58,7 @@ const Header = React.memo(function Header({
 
 
 
-      {/* Version Badge */}
-      <div className="version-badge">
-        <div className="version-chip">
-          WD v{APP_VERSION}
-        </div>
-      </div>
+      {/* Version badge removed */}
     </div>
   );
 });

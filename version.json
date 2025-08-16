@@ -1,10 +1,10 @@
 {
-  "commit": "1a62ee522c45b4f5eedc48d30926d76c955f1b39",
-  "shortCommit": "1a62ee5",
+  "commit": "ec421d6743e566e3f2a5e796672613160c17c437",
+  "shortCommit": "ec421d6",
   "branch": "restore-baseline",
-  "tag": "ferragosto",
-  "timestamp": "2025-08-16T07:14:58.017Z",
+  "tag": "16_ago",
+  "timestamp": "2025-08-16T14:33:29.635Z",
   "version": "2.52",
-  "buildTime": "2025-08-16T07:14:58.017Z",
+  "buildTime": "2025-08-16T14:33:29.635Z",
   "environment": "development"
 }

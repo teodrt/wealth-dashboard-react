@@ -490,10 +490,6 @@ export default function App(){
                   return subsSet.size;
                 })()
               }</div>
-              <div className="asset-change positive">
-                <span>↑</span>
-                <span>{category ? 'Unique subs' : 'Select a category'}</span>
-              </div>
             </div>
           </div>
         </div>
